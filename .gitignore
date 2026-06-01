@@ -1,0 +1,15 @@
+# Rust build output
+/target
+**/target
+
+# macOS
+.DS_Store
+
+# Editor cruft
+*.swp
+.idea/
+.vscode/
+
+# Runtime pidfiles written by `tunnel open` live in $TMPDIR, not here,
+# but ignore any that leak into the repo during local testing.
+tunnel-*.pid
