@@ -1,0 +1,21 @@
+[package]
+name = "agent"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "tunnel"
+path = "src/main.rs"
+
+[dependencies]
+protocol = { path = "../protocol" }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+futures-util.workspace = true
+tokio-tungstenite = "0.23"
+clap = { version = "4", features = ["derive"] }
+getrandom = "0.2"
+hex = "0.4"
+nix = { version = "0.29", features = ["signal", "process"] }

@@ -1,0 +1,16 @@
+[package]
+name = "relay"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+protocol = { path = "../protocol" }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+futures-util.workspace = true
+axum = { version = "0.7", features = ["ws"] }
+
+[dev-dependencies]
+tokio-tungstenite = "0.23"
