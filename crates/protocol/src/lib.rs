@@ -5,3 +5,5 @@ pub mod frame;
 pub use frame::{AgentFrame, ErrorCode, Tool, ViewerFrame};
 pub mod scope;
 pub use scope::{decide_call, filter_tools, CallDecision};
+pub mod ttl;
+pub use ttl::parse_ttl;
