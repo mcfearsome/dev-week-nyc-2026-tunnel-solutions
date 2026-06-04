@@ -1,21 +1,14 @@
-// PHASE 1 SCAFFOLD: connect as the agent role and echo frames. Replaced in Chunk 5.
-use futures_util::{SinkExt, StreamExt};
-use tokio_tungstenite::tungstenite::Message;
+use agent::cli::{parse_scope, Cli, Command};
+use agent::session::{self, OpenArgs};
+use clap::Parser;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let relay = std::env::var("RELAY").unwrap_or_else(|_| "ws://127.0.0.1:8787".into());
-    let id = "demo";
-    let url = format!("{relay}/agent/{id}");
-    let (mut ws, _) = tokio_tungstenite::connect_async(&url).await?;
-    println!("agent connected → {url}");
-    println!("link → http://127.0.0.1:8787/t/{id}");
-    while let Some(Ok(msg)) = ws.next().await {
-        if let Message::Text(t) = msg {
-            println!("recv: {t}");
-            ws.send(Message::Text(format!("echo:{t}"))).await?;
+    match Cli::parse().command {
+        Command::Open { server, server_args, ttl, scope, relay } => {
+            let ttl = protocol::parse_ttl(&ttl).map_err(anyhow::Error::msg)?;
+            session::open(OpenArgs { server, server_args, ttl, scope: parse_scope(&scope), relay }).await
         }
+        Command::Close { tunnel_id } => session::close(tunnel_id.as_deref()),
     }
-    println!("relay closed the socket");
-    Ok(())
 }

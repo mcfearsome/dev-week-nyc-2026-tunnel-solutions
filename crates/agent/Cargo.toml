@@ -19,6 +19,7 @@ clap = { version = "4", features = ["derive"] }
 getrandom = "0.2"
 hex = "0.4"
 nix = { version = "0.29", features = ["signal", "process"] }
+humantime = "2"
 
 [dev-dependencies]
 relay = { path = "../relay" }
