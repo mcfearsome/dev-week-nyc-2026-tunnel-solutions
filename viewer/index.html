@@ -1,4 +1,24 @@
 <!doctype html>
+<html lang="en">
 <meta charset="utf-8">
-<title>tunnel.solutions</title>
-<body style="font-family:monospace">stub viewer — replaced in Chunk 3</body>
+<title>tunnel.solutions — echo</title>
+<body style="font-family:ui-monospace,monospace;background:#0b0e14;color:#cbd5e1;padding:2rem">
+  <h1 style="color:#7dd3fc">tunnel.solutions <span style="color:#64748b">echo check</span></h1>
+  <input id="msg" value="ping" style="background:#111827;color:#e5e7eb;border:1px solid #334155;padding:.4rem">
+  <button id="send" style="background:#0ea5e9;border:0;color:#001;padding:.45rem .8rem;cursor:pointer">send →</button>
+  <pre id="log" style="margin-top:1rem;white-space:pre-wrap"></pre>
+<script>
+  const id = location.pathname.split("/").pop() || "demo";
+  const log = (s) => document.getElementById("log").textContent += s + "\n";
+  const ws = new WebSocket(`ws://${location.host}/viewer/${id}`);
+  ws.onopen = () => log("✓ connected as viewer/" + id);
+  ws.onmessage = (e) => log("← " + e.data);
+  ws.onclose = () => log("× socket closed (link dead)");
+  document.getElementById("send").onclick = () => {
+    const m = document.getElementById("msg").value;
+    ws.send(m);
+    log("→ " + m);
+  };
+</script>
+</body>
+</html>
