@@ -20,7 +20,7 @@ where
     }
 }
 
-async fn read_link() -> (String, String) {
+async fn read_link(expected_relay_port: u16) -> (String, String) {
     let path = std::env::temp_dir().join("tunnel-latest.pid");
     for _ in 0..50 {
         if let Ok(body) = std::fs::read_to_string(&path) {
@@ -28,9 +28,12 @@ async fn read_link() -> (String, String) {
             let _pid = l.next();
             let id = l.next().unwrap_or("").to_string();
             let link = l.next().unwrap_or("").to_string();
-            if let Some((_, token)) = link.split_once('#') {
-                if !id.is_empty() && !token.is_empty() {
-                    return (id, token.to_string());
+            // Verify this pidfile belongs to our relay instance (port check).
+            if link.contains(&format!(":{expected_relay_port}/")) {
+                if let Some((_, token)) = link.split_once('#') {
+                    if !id.is_empty() && !token.is_empty() {
+                        return (id, token.to_string());
+                    }
                 }
             }
         }
@@ -60,7 +63,7 @@ async fn read_succeeds_shell_refused() {
     };
     tokio::spawn(async move { agent::session::open(open).await.unwrap(); });
 
-    let (id, token) = read_link().await;
+    let (id, token) = read_link(port).await;
     let (mut v, _) = tokio_tungstenite::connect_async(format!("{relay_url}/viewer/{id}")).await.unwrap();
 
     // hello -> ready + filtered tools
