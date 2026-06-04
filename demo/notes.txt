@@ -1,0 +1,4 @@
+tunnel.solutions — shared notes
+================================
+This file is reachable through the `read` tool while the tunnel is open.
+The `shell` tool exists on the server but is OUT OF SCOPE for this link.
