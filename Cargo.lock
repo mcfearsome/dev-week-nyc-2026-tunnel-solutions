@@ -7,12 +7,14 @@ name = "agent"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "axum",
  "clap",
  "futures-util",
  "getrandom",
  "hex",
  "nix",
  "protocol",
+ "relay",
  "serde",
  "serde_json",
  "tokio",
