@@ -4,6 +4,7 @@ use protocol::{
     decide_call, filter_tools, mint, verify, AgentFrame, CallDecision, Claims, ErrorCode,
     TokenError, Tool, ViewerFrame,
 };
+use std::ops::ControlFlow;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{mpsc, Notify};
@@ -120,7 +121,9 @@ pub async fn open(args: OpenArgs) -> Result<()> {
                     Ok(f) => f,
                     Err(_) => { let _ = out_tx.send(err_frame(None, ErrorCode::BadRequest, None, "unparseable frame")); continue; }
                 };
-                handle_frame(frame, &secret, exp, &child_tools, &mut verified, &mut child, &out_tx).await;
+                if handle_frame(frame, &secret, exp, &child_tools, &mut verified, &mut child, &out_tx).await.is_break() {
+                    break; // invalid/expired Hello closes the session (spec §7.3)
+                }
             }
         }
     }
@@ -132,6 +135,8 @@ pub async fn open(args: OpenArgs) -> Result<()> {
     Ok(())
 }
 
+/// Handle one viewer frame. Returns `Break` when the session must close
+/// (an invalid or expired `Hello`, per spec §7.3); `Continue` otherwise.
 async fn handle_frame(
     frame: ViewerFrame,
     secret: &[u8],
@@ -140,7 +145,7 @@ async fn handle_frame(
     verified: &mut Option<Claims>,
     child: &mut McpChild,
     out_tx: &mpsc::UnboundedSender<AgentFrame>,
-) {
+) -> ControlFlow<()> {
     match frame {
         ViewerFrame::Hello { token } => match verify(secret, &token, now_secs()) {
             Ok(c) => {
@@ -149,8 +154,14 @@ async fn handle_frame(
                 let _ = out_tx.send(AgentFrame::Tools { tools: filter_tools(child_tools, &c.scope) });
                 *verified = Some(c);
             }
-            Err(TokenError::Expired) => { let _ = out_tx.send(err_frame(None, ErrorCode::Expired, None, "token expired")); }
-            Err(_) => { let _ = out_tx.send(err_frame(None, ErrorCode::Unauthorized, None, "invalid token")); }
+            Err(TokenError::Expired) => {
+                let _ = out_tx.send(err_frame(None, ErrorCode::Expired, None, "token expired"));
+                return ControlFlow::Break(());
+            }
+            Err(_) => {
+                let _ = out_tx.send(err_frame(None, ErrorCode::Unauthorized, None, "invalid token"));
+                return ControlFlow::Break(());
+            }
         },
         ViewerFrame::List => match verified {
             Some(c) => { let _ = out_tx.send(AgentFrame::Tools { tools: filter_tools(child_tools, &c.scope) }); }
@@ -159,7 +170,7 @@ async fn handle_frame(
         ViewerFrame::Call { id, tool, args } => {
             let Some(c) = verified.clone() else {
                 let _ = out_tx.send(err_frame(Some(id), ErrorCode::Unauthorized, None, "say hello first"));
-                return;
+                return ControlFlow::Continue(());
             };
             match decide_call(&c, now_secs(), &tool) {
                 CallDecision::Expired => { let _ = out_tx.send(err_frame(Some(id), ErrorCode::Expired, None, "ttl expired")); }
@@ -174,6 +185,7 @@ async fn handle_frame(
             }
         }
     }
+    ControlFlow::Continue(())
 }
 
 pub fn close(tunnel_id: Option<&str>) -> Result<()> {
