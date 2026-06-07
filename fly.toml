@@ -1,0 +1,25 @@
+# Fly.io config for the tunnel.solutions relay.
+#
+# Single warm machine: the tunnel registry is in-memory, so a viewer and its agent must
+# reach the SAME instance. Do not scale past 1 machine without sticky routing by tunnel_id
+# or a shared backplane. min_machines_running=1 + auto_stop_machines="off" keep one up.
+app = "tunnel-locker"
+primary_region = "iad"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/healthz"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

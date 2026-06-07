@@ -1,0 +1,7 @@
+target/
+.git/
+docs/
+.playwright-mcp/
+*.png
+.DS_Store
+**/*.swp
