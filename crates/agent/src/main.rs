@@ -4,6 +4,8 @@ use clap::Parser;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // rustls 0.23 needs a process-wide crypto provider installed before any wss:// dial.
+    let _ = rustls::crypto::ring::default_provider().install_default();
     match Cli::parse().command {
         Command::Open { server, server_args, ttl, scope, relay } => {
             let ttl = protocol::parse_ttl(&ttl).map_err(anyhow::Error::msg)?;
