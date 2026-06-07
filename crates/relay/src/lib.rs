@@ -27,20 +27,20 @@ pub fn build_app() -> Router {
 }
 
 async fn viewer_page() -> impl IntoResponse {
-    match tokio::fs::read_to_string("viewer/index.html").await {
-        Ok(html) => Html(html).into_response(),
-        Err(_) => (
-            axum::http::StatusCode::NOT_FOUND,
-            "viewer/index.html not found (run relay from the repo root)",
-        )
-            .into_response(),
-    }
+    // Embedded at compile time so the relay binary is self-contained (no CWD/file deps).
+    Html(include_str!("../../../viewer/index.html"))
 }
 
+const MAX_WS_MESSAGE: usize = 1 << 20; // 1 MiB — guard against a frame-bomb OOM.
+
 async fn agent_ws(Path(id): Path<String>, State(s): State<AppState>, ws: WebSocketUpgrade) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| run_side(s.registry, id, Role::Agent, socket))
+    ws.max_message_size(MAX_WS_MESSAGE)
+        .max_frame_size(MAX_WS_MESSAGE)
+        .on_upgrade(move |socket| run_side(s.registry, id, Role::Agent, socket))
 }
 
 async fn viewer_ws(Path(id): Path<String>, State(s): State<AppState>, ws: WebSocketUpgrade) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| run_side(s.registry, id, Role::Viewer, socket))
+    ws.max_message_size(MAX_WS_MESSAGE)
+        .max_frame_size(MAX_WS_MESSAGE)
+        .on_upgrade(move |socket| run_side(s.registry, id, Role::Viewer, socket))
 }

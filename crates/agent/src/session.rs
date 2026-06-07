@@ -35,6 +35,12 @@ fn relay_host(relay: &str) -> String {
     relay.trim_start_matches("ws://").trim_start_matches("wss://").trim_end_matches('/').to_string()
 }
 
+/// The viewer link's scheme tracks the relay transport: a `wss://` relay sits behind TLS, so
+/// the link is `https://`; a plain `ws://` relay (local dev) yields `http://`.
+fn link_scheme(relay: &str) -> &'static str {
+    if relay.trim_start().starts_with("wss://") { "https" } else { "http" }
+}
+
 fn err_frame(id: Option<u64>, code: ErrorCode, tool: Option<String>, msg: &str) -> AgentFrame {
     AgentFrame::Error { id, code, tool, message: Some(msg.to_string()) }
 }
@@ -59,7 +65,7 @@ pub async fn open(args: OpenArgs) -> Result<()> {
     let (mut sink, mut stream) = ws.split();
 
     // 4. Pidfile + banner.
-    let link = format!("http://{host}/t/{tunnel_id}#{token}");
+    let link = format!("{}://{host}/t/{tunnel_id}#{token}", link_scheme(&args.relay));
     pidfile::write(&tunnel_id, &link)?;
     print_banner(&args, &child_tools, &host, &tunnel_id, &token);
 
@@ -210,8 +216,26 @@ fn print_banner(args: &OpenArgs, child_tools: &[Tool], host: &str, id: &str, tok
     println!("  ttl        {}", humantime::format_duration(args.ttl));
     println!("  token      ✓   minted");
     println!("  relay      {}  connected", args.relay);
-    println!("  link  →    http://{host}/t/{id}#{token}");
+    println!("  link  →    {}://{host}/t/{id}#{token}", link_scheme(&args.relay));
     println!();
     println!("  serving — ctrl-c or `tunnel close` to revoke");
     println!();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{link_scheme, relay_host};
+
+    #[test]
+    fn link_scheme_tracks_relay_transport() {
+        assert_eq!(link_scheme("ws://127.0.0.1:8787"), "http");
+        assert_eq!(link_scheme("wss://tunnel.locker"), "https");
+        assert_eq!(link_scheme("wss://tunnel-relay.fly.dev/"), "https");
+    }
+
+    #[test]
+    fn relay_host_strips_scheme_and_trailing_slash() {
+        assert_eq!(relay_host("ws://127.0.0.1:8787"), "127.0.0.1:8787");
+        assert_eq!(relay_host("wss://tunnel.locker/"), "tunnel.locker");
+    }
 }

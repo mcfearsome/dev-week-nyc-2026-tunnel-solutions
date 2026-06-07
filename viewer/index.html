@@ -139,7 +139,8 @@
     ws.send(JSON.stringify({ type: "call", id: cid, tool, args }));
   }
 
-  const ws = new WebSocket(`ws://${location.host}/viewer/${id}`);
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  const ws = new WebSocket(`${proto}://${location.host}/viewer/${id}`);
   ws.onopen = () => { setStatus("handshaking…", "live"); ws.send(JSON.stringify({ type: "hello", token })); };
   ws.onclose = () => { if (!dead) killUI("× link closed"); };
   ws.onmessage = (e) => {
