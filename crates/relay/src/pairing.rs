@@ -1,3 +1,4 @@
+use crate::stats::Stats;
 use axum::extract::ws::WebSocket;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -34,7 +35,7 @@ fn over_capacity(current_len: usize, id_present: bool, max: usize) -> bool {
     !id_present && current_len >= max
 }
 
-pub async fn run_side(reg: Registry, id: String, role: Role, socket: WebSocket) {
+pub async fn run_side(reg: Registry, stats: Arc<Stats>, id: String, role: Role, socket: WebSocket) {
     let (mut sink, mut stream) = socket.split();
     let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
 
@@ -62,6 +63,11 @@ pub async fn run_side(reg: Registry, id: String, role: Role, socket: WebSocket) 
         }
     }
 
+    // A registered agent means a new tunnel exists.
+    if matches!(role, Role::Agent) {
+        stats.tunnel_opened();
+    }
+
     // Writer pump: our channel -> our socket.
     let writer = tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
@@ -76,6 +82,7 @@ pub async fn run_side(reg: Registry, id: String, role: Role, socket: WebSocket) 
     while let Some(Ok(msg)) = stream.next().await {
         match msg {
             Message::Text(_) | Message::Binary(_) => {
+                stats.frame_relayed();
                 let peer = {
                     let map = reg.lock().await;
                     map.get(&id).and_then(|slot| match role {

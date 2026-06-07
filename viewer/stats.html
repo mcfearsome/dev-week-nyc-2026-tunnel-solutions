@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tunnel.locker — stats</title>
+<style>
+  :root { --bg:#0b0e14; --fg:#cbd5e1; --dim:#64748b; --accent:#7dd3fc; --panel:#111827; --line:#1f2937; }
+  body { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; background:var(--bg); color:var(--fg); margin:0; padding:3rem 1.5rem; }
+  .wrap { max-width:680px; margin:0 auto; }
+  h1 { color:var(--accent); font-size:1.4rem; margin:0; }
+  h1 a { color:var(--dim); font-size:.8rem; text-decoration:none; margin-left:.5rem; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:.8rem; margin-top:1.5rem; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:1.2rem; }
+  .card .n { color:var(--accent); font-size:2rem; font-weight:bold; }
+  .card .l { color:var(--dim); font-size:.78rem; text-transform:uppercase; letter-spacing:.04em; margin-top:.2rem; }
+  .meta { color:var(--dim); font-size:.78rem; margin-top:1.5rem; }
+</style>
+<body>
+<div class="wrap">
+  <h1>tunnel.locker &mdash; stats <a href="/">&larr; home</a></h1>
+  <div class="grid" id="grid"></div>
+  <div class="meta" id="meta">loading&hellip;</div>
+</div>
+<script>
+  const FIELDS = [
+    ["unique_visitors", "unique visitors"],
+    ["page_views", "page views"],
+    ["tunnels_opened", "tunnels opened"],
+    ["tunnel_links_opened", "links opened"],
+    ["tool_calls", "tool calls"],
+    ["out_of_scope_blocks", "out-of-scope blocked"],
+    ["frames_relayed", "frames relayed"],
+  ];
+  const el = (t, c, txt) => {
+    const n = document.createElement(t);
+    if (c) n.className = c;
+    if (txt != null) n.textContent = txt;
+    return n;
+  };
+  async function refresh() {
+    try {
+      const s = await (await fetch("/stats.json")).json();
+      const grid = document.getElementById("grid");
+      grid.replaceChildren();
+      for (const [k, label] of FIELDS) {
+        const card = el("div", "card");
+        card.appendChild(el("div", "n", Number(s[k] ?? 0).toLocaleString()));
+        card.appendChild(el("div", "l", label));
+        grid.appendChild(card);
+      }
+      document.getElementById("meta").textContent = "no cookies · no stored IPs · live · auto-refresh 5s";
+    } catch {
+      document.getElementById("meta").textContent = "stats unavailable";
+    }
+  }
+  refresh();
+  setInterval(refresh, 5000);
+</script>
+</body>
+</html>

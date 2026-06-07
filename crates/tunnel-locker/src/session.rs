@@ -114,6 +114,7 @@ pub async fn open(args: OpenArgs) -> Result<()> {
 
     // 8. Event loop. Verified claims cached after a good Hello; exp re-checked per call.
     let mut verified: Option<Claims> = None;
+    let mut counts = SessionCounts::default();
     loop {
         tokio::select! {
             _ = shutdown.notified() => break,
@@ -127,7 +128,7 @@ pub async fn open(args: OpenArgs) -> Result<()> {
                     Ok(f) => f,
                     Err(_) => { let _ = out_tx.send(err_frame(None, ErrorCode::BadRequest, None, "unparseable frame")); continue; }
                 };
-                if handle_frame(frame, &secret, exp, &child_tools, &mut verified, &mut child, &out_tx).await.is_break() {
+                if handle_frame(frame, &secret, exp, &child_tools, &mut verified, &mut child, &out_tx, &mut counts).await.is_break() {
                     break; // invalid/expired Hello closes the session (spec §7.3)
                 }
             }
@@ -135,6 +136,7 @@ pub async fn open(args: OpenArgs) -> Result<()> {
     }
 
     // Teardown (one path for TTL, signal, and relay-close).
+    report_usage(&args.relay, &counts).await;
     child.kill().await;
     pidfile::remove(&tunnel_id);
     writer.abort();
@@ -151,6 +153,7 @@ async fn handle_frame(
     verified: &mut Option<Claims>,
     child: &mut McpChild,
     out_tx: &mpsc::UnboundedSender<AgentFrame>,
+    counts: &mut SessionCounts,
 ) -> ControlFlow<()> {
     match frame {
         ViewerFrame::Hello { token } => match verify(secret, &token, now_secs()) {
@@ -180,18 +183,48 @@ async fn handle_frame(
             };
             match decide_call(&c, now_secs(), &tool) {
                 CallDecision::Expired => { let _ = out_tx.send(err_frame(Some(id), ErrorCode::Expired, None, "ttl expired")); }
-                CallDecision::OutOfScope => { let _ = out_tx.send(err_frame(Some(id), ErrorCode::OutOfScope, Some(tool), "tool not in scope")); }
-                CallDecision::Forward => match child.call_tool(&tool, args).await {
-                    Ok(result) => {
-                        let content = result.get("content").cloned().unwrap_or(result);
-                        let _ = out_tx.send(AgentFrame::Result { id, content });
+                CallDecision::OutOfScope => {
+                    counts.blocks += 1;
+                    let _ = out_tx.send(err_frame(Some(id), ErrorCode::OutOfScope, Some(tool), "tool not in scope"));
+                }
+                CallDecision::Forward => {
+                    counts.calls += 1;
+                    match child.call_tool(&tool, args).await {
+                        Ok(result) => {
+                            let content = result.get("content").cloned().unwrap_or(result);
+                            let _ = out_tx.send(AgentFrame::Result { id, content });
+                        }
+                        Err(e) => { let _ = out_tx.send(err_frame(Some(id), ErrorCode::ToolError, Some(tool), &e.to_string())); }
                     }
-                    Err(e) => { let _ = out_tx.send(err_frame(Some(id), ErrorCode::ToolError, Some(tool), &e.to_string())); }
-                },
+                }
             }
         }
     }
     ControlFlow::Continue(())
+}
+
+#[derive(Default)]
+struct SessionCounts {
+    calls: u64,
+    blocks: u64,
+}
+
+/// Best-effort aggregate usage report to the relay's `/report` endpoint on shutdown. Reuses
+/// the WS+TLS stack (no HTTP-client dep); failures and timeouts are ignored. Integers only —
+/// no tool content ever leaves the agent.
+async fn report_usage(relay: &str, counts: &SessionCounts) {
+    if counts.calls == 0 && counts.blocks == 0 {
+        return;
+    }
+    let url = format!("{}/report", relay.trim_end_matches('/'));
+    let body = serde_json::json!({ "calls": counts.calls, "blocks": counts.blocks }).to_string();
+    let send = async {
+        if let Ok((mut ws, _)) = tokio_tungstenite::connect_async(&url).await {
+            let _ = ws.send(Message::Text(body)).await;
+            let _ = ws.flush().await;
+        }
+    };
+    let _ = tokio::time::timeout(Duration::from_secs(3), send).await;
 }
 
 pub fn close(tunnel_id: Option<&str>) -> Result<()> {

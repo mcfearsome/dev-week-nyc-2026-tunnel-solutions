@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tunnel.locker — capability-scoped MCP tunnels</title>
+<style>
+  :root { --bg:#0b0e14; --fg:#cbd5e1; --dim:#64748b; --accent:#7dd3fc; --ok:#34d399; --panel:#111827; --line:#1f2937; }
+  * { box-sizing:border-box; }
+  body { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; background:var(--bg); color:var(--fg); margin:0; line-height:1.6; }
+  .wrap { max-width:760px; margin:0 auto; padding:3rem 1.5rem 4rem; }
+  h1 { color:var(--accent); font-size:1.8rem; margin:0 0 .3rem; }
+  .tag { color:var(--dim); margin-bottom:2rem; }
+  h2 { font-size:1.05rem; margin:2rem 0 .6rem; border-bottom:1px solid var(--line); padding-bottom:.3rem; }
+  .wedge b { color:var(--accent); }
+  code { color:var(--accent); }
+  pre { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:1rem; overflow-x:auto; font-size:.85rem; line-height:1.5; }
+  .prompt { color:var(--ok); } .comment { color:var(--dim); } .accent { color:var(--accent); }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:.6rem; margin:1rem 0; }
+  .stat { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:.8rem; text-align:center; }
+  .stat .n { color:var(--accent); font-size:1.5rem; font-weight:bold; }
+  .stat .l { color:var(--dim); font-size:.7rem; text-transform:uppercase; letter-spacing:.04em; margin-top:.2rem; }
+  a { color:var(--accent); }
+  .foot { color:var(--dim); font-size:.8rem; margin-top:2.5rem; }
+</style>
+<body>
+<div class="wrap">
+  <h1>tunnel.locker</h1>
+  <div class="tag">ephemeral, capability-scoped tunnels for a locally-running MCP server</div>
+
+  <p class="wedge">ngrok exposes a <i>port</i>. tunnel.locker knows the far end is an <b>MCP server with a tool list</b>, so it's <b>MCP-aware, ephemeral, and capability-scoped</b>: it filters the advertised tools to a <code>--scope</code> allowlist, refuses any out-of-scope call agent-side, and enforces a TTL on every call — so revocation is real, not cosmetic.</p>
+
+  <h2>live</h2>
+  <div class="stats" id="stats">
+    <div class="stat"><div class="n" data-k="unique_visitors">·</div><div class="l">visitors</div></div>
+    <div class="stat"><div class="n" data-k="tunnels_opened">·</div><div class="l">tunnels</div></div>
+    <div class="stat"><div class="n" data-k="tool_calls">·</div><div class="l">tool calls</div></div>
+    <div class="stat"><div class="n" data-k="out_of_scope_blocks">·</div><div class="l">blocked</div></div>
+  </div>
+  <div class="foot"><a href="/stats">full stats →</a></div>
+
+  <h2>try it</h2>
+  <pre><span class="comment"># install</span>
+<span class="prompt">$</span> cargo install tunnel-locker
+
+<span class="comment"># share a read-only view of your MCP server</span>
+<span class="prompt">$</span> tunnel open ./my-mcp-server <span class="accent">--relay wss://tunnel.locker --scope read</span>
+  link  <span class="accent">&rarr;</span>  https://tunnel.locker/t/3f9a8c&hellip;#&lt;token&gt;</pre>
+  <p class="wedge">Open the link as a teammate: in-scope tools work; out-of-scope calls are refused; the link dies on TTL or <code>tunnel close</code>.</p>
+
+  <div class="foot">
+    no third-party trackers &middot; no cookies &middot; the relay holds no state past a session<br>
+    <a href="https://github.com/mcfearsome/tunnel-solutions">github.com/mcfearsome/tunnel-solutions</a>
+  </div>
+</div>
+<script>
+  fetch("/stats.json").then(r => r.json()).then(s => {
+    document.querySelectorAll("#stats .n[data-k]").forEach(el => {
+      const v = s[el.dataset.k];
+      el.textContent = Number(v ?? 0).toLocaleString();
+    });
+  }).catch(() => {});
+</script>
+</body>
+</html>
