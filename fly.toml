@@ -6,6 +6,15 @@
 app = "tunnel-locker"
 primary_region = "iad"
 
+# Aggregate analytics counters persist here (survives restarts/redeploys). Aggregate-only —
+# no per-session data, no tool I/O, no IPs. The volume binds to the single machine.
+[env]
+  STATS_PATH = "/data/stats.json"
+
+[mounts]
+  source = "stats_data"
+  destination = "/data"
+
 [http_service]
   internal_port = 8080
   force_https = true
