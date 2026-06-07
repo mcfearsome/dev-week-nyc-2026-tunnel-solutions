@@ -1,62 +1,267 @@
 <!doctype html>
 <html lang="en">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>tunnel.locker — capability-scoped MCP tunnels</title>
+<title>tunnel.locker — capability-scoped tunnels for MCP servers</title>
+<meta name="description" content="An ephemeral, capability-scoped tunnel for a locally-running MCP server. Share specific tools with a teammate over a disposable link. MCP-aware, not just a port.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a0c12'/%3E%3Cpath d='M9 11l5 5-5 5' stroke='%237dd3fc' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Crect x='16.5' y='19' width='7' height='2.5' rx='1.2' fill='%237dd3fc'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <style>
-  :root { --bg:#0b0e14; --fg:#cbd5e1; --dim:#64748b; --accent:#7dd3fc; --ok:#34d399; --panel:#111827; --line:#1f2937; }
-  * { box-sizing:border-box; }
-  body { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; background:var(--bg); color:var(--fg); margin:0; line-height:1.6; }
-  .wrap { max-width:760px; margin:0 auto; padding:3rem 1.5rem 4rem; }
-  h1 { color:var(--accent); font-size:1.8rem; margin:0 0 .3rem; }
-  .tag { color:var(--dim); margin-bottom:2rem; }
-  h2 { font-size:1.05rem; margin:2rem 0 .6rem; border-bottom:1px solid var(--line); padding-bottom:.3rem; }
-  .wedge b { color:var(--accent); }
-  code { color:var(--accent); }
-  pre { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:1rem; overflow-x:auto; font-size:.85rem; line-height:1.5; }
-  .prompt { color:var(--ok); } .comment { color:var(--dim); } .accent { color:var(--accent); }
-  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:.6rem; margin:1rem 0; }
-  .stat { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:.8rem; text-align:center; }
-  .stat .n { color:var(--accent); font-size:1.5rem; font-weight:bold; }
-  .stat .l { color:var(--dim); font-size:.7rem; text-transform:uppercase; letter-spacing:.04em; margin-top:.2rem; }
-  a { color:var(--accent); }
-  .foot { color:var(--dim); font-size:.8rem; margin-top:2.5rem; }
+  :root{
+    --bg:#0a0c12; --bg2:#0c0f17; --panel:#11141d; --panel2:#141826;
+    --line:#1d2231; --faint:#2b3242;
+    --text:#dde1ea; --mut:#8b93a7; --dim:#5b6376;
+    --cyan:#7dd3fc; --cyan-d:#38bdf8; --amber:#fcd34d; --ok:#4ade80; --bad:#fb7185;
+    --serif:"Instrument Serif",Georgia,serif;
+    --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:var(--mono);background:var(--bg);color:var(--text);font-size:15px;line-height:1.65;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  body::before{content:"";position:fixed;inset:0;z-index:-2;pointer-events:none;
+    background:radial-gradient(1100px 600px at 78% -8%, rgba(125,211,252,.10), transparent 60%),
+      radial-gradient(900px 700px at 8% 12%, rgba(252,211,77,.045), transparent 55%),
+      linear-gradient(var(--bg2),var(--bg))}
+  body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.5;
+    background-image:linear-gradient(rgba(125,211,252,.030) 1px,transparent 1px),linear-gradient(90deg,rgba(125,211,252,.030) 1px,transparent 1px);
+    background-size:46px 46px;-webkit-mask-image:radial-gradient(circle at 50% 30%,#000 0%,transparent 75%);mask-image:radial-gradient(circle at 50% 30%,#000 0%,transparent 75%)}
+  .grain{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.045;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 1.5rem}
+  .accent{color:var(--cyan)} .ok{color:var(--ok)} .bad{color:var(--bad)} .amber{color:var(--amber)} .mut{color:var(--mut)}
+
+  nav{position:sticky;top:0;z-index:20;backdrop-filter:blur(10px);background:linear-gradient(var(--bg),rgba(10,12,18,.6));border-bottom:1px solid var(--line)}
+  nav .row{display:flex;align-items:center;gap:1.5rem;height:60px}
+  .brand{font-weight:600;letter-spacing:-.01em}.brand b{color:var(--cyan)}
+  nav .links{margin-left:auto;display:flex;gap:1.4rem;align-items:center;font-size:.85rem}
+  nav .links a{color:var(--mut);transition:color .2s}nav .links a:hover{color:var(--text)}
+  .ghost{border:1px solid var(--faint);border-radius:7px;padding:.42rem .8rem;color:var(--text)!important;transition:.2s}
+  .ghost:hover{border-color:var(--cyan);box-shadow:0 0 0 1px rgba(125,211,252,.3)}
+
+  .hero{display:grid;grid-template-columns:1.04fr 1fr;gap:3rem;align-items:center;padding:5.5rem 0 4rem}
+  .eyebrow{display:inline-flex;align-items:center;gap:.5rem;font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;color:var(--cyan);border:1px solid var(--line);border-radius:100px;padding:.35rem .8rem;margin-bottom:1.5rem;background:var(--panel)}
+  .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok);animation:pulse 2.4s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  h1{font-family:var(--serif);font-weight:400;font-size:clamp(2.7rem,5.6vw,4.3rem);line-height:1.02;letter-spacing:-.01em;margin-bottom:1.1rem}
+  h1 .em{font-style:italic;color:var(--cyan)}
+  h1 .mono{font-family:var(--mono);font-size:.4em;font-weight:500;letter-spacing:-.01em;color:var(--mut);display:block;margin-top:.7rem;line-height:1.5}
+  .lede{color:var(--mut);font-size:1.02rem;max-width:46ch;margin-bottom:2rem}.lede b{color:var(--text);font-weight:500}
+  .cta{display:flex;gap:.8rem;flex-wrap:wrap;align-items:center}
+  .install{display:flex;align-items:center;gap:.7rem;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:.7rem .95rem;font-size:.9rem;cursor:pointer;transition:.2s}
+  .install:hover{border-color:var(--faint)}.install .pr{color:var(--ok)}.install .cp{color:var(--dim);font-size:.78rem;margin-left:.3rem}
+  .btn{background:var(--cyan);color:#04141f;font-weight:600;border-radius:9px;padding:.72rem 1.15rem;border:0;font-family:inherit;font-size:.9rem;cursor:pointer;transition:.2s;box-shadow:0 6px 24px -10px rgba(125,211,252,.6)}
+  .btn:hover{background:var(--cyan-d);transform:translateY(-1px)}
+
+  .term{background:linear-gradient(180deg,#0d111b,#0a0d15);border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 40px 90px -50px rgba(0,0,0,.9),0 0 0 1px rgba(125,211,252,.04),inset 0 1px 0 rgba(255,255,255,.03)}
+  .term .bar{display:flex;align-items:center;gap:.5rem;padding:.7rem .9rem;border-bottom:1px solid var(--line);background:rgba(255,255,255,.015)}
+  .term .bar i{width:11px;height:11px;border-radius:50%;display:block}
+  .term .bar i:nth-child(1){background:#ff5f57}.term .bar i:nth-child(2){background:#febc2e}.term .bar i:nth-child(3){background:#28c840}
+  .term .bar span{margin-left:.6rem;color:var(--dim);font-size:.74rem}
+  .term .body{padding:1.1rem 1.15rem 1.3rem;font-size:.82rem;line-height:1.75;min-height:340px}
+  .ln{white-space:pre-wrap;opacity:0;animation:rise .5s cubic-bezier(.2,.7,.2,1) forwards;animation-delay:calc(var(--i,0)*.11s + .25s)}
+  @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .cmd{color:var(--text)}.cmd .pr{color:var(--ok)}.cmd .fl{color:var(--cyan)}
+  .cur{display:inline-block;width:8px;height:1.05em;background:var(--cyan);vertical-align:-2px;margin-left:2px;animation:blink 1.05s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+
+  section{padding:4.5rem 0;border-top:1px solid var(--line)}
+  .kicker{font-size:.72rem;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);margin-bottom:1rem}
+  .pull{font-family:var(--serif);font-size:clamp(1.7rem,3.6vw,2.7rem);line-height:1.22;letter-spacing:-.01em;max-width:24ch}
+  .pull .it{font-style:italic;color:var(--cyan)}.pull .am{font-style:italic;color:var(--amber)}
+  .sub{color:var(--mut);max-width:62ch;margin-top:1.4rem}.sub b{color:var(--text);font-weight:500}.sub code{color:var(--cyan)}
+
+  .flow{display:grid;grid-template-columns:repeat(4,1fr);gap:.7rem;margin-top:2.4rem;position:relative}
+  .node{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:1.1rem;position:relative}
+  .node h4{font-size:.92rem;margin-bottom:.3rem}.node p{font-size:.78rem;color:var(--mut);line-height:1.55}
+  .node .tag{font-size:.64rem;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-bottom:.6rem;display:block}
+  .node.smart{border-color:rgba(125,211,252,.35);box-shadow:0 0 0 1px rgba(125,211,252,.12),0 0 50px -20px rgba(125,211,252,.5)}
+  .node.smart .tag{color:var(--cyan)}
+  .arrow{position:absolute;top:50%;right:-.55rem;transform:translateY(-50%);color:var(--faint);z-index:2;font-size:.9rem}
+  .trust{margin-top:1.4rem;font-size:.82rem;color:var(--mut);border-left:2px solid var(--cyan);padding-left:.9rem}.trust b{color:var(--text);font-weight:500}
+
+  .scope{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:2.4rem}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:1.3rem;position:relative;overflow:hidden}
+  .card.allow{border-color:rgba(74,222,128,.28)}.card.deny{border-color:rgba(251,113,133,.28)}
+  .card .ic{font-size:1.1rem;margin-bottom:.7rem}.card.allow .ic{color:var(--ok)}.card.deny .ic{color:var(--bad)}
+  .card code{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:.5rem .65rem;display:block;font-size:.78rem;margin:.6rem 0;color:var(--text)}
+  .card h4{font-size:.95rem;margin-bottom:.2rem}.card p{font-size:.8rem;color:var(--mut)}
+  .card .glow{position:absolute;inset:auto -30% -50% auto;width:200px;height:200px;border-radius:50%;filter:blur(60px);opacity:.18}
+  .card.allow .glow{background:var(--ok)}.card.deny .glow{background:var(--bad)}
+
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-top:2.2rem}
+  .stat{background:linear-gradient(180deg,var(--panel),var(--bg));border:1px solid var(--line);border-radius:12px;padding:1.3rem 1.1rem;text-align:center}
+  .stat .n{font-family:var(--serif);font-size:2.6rem;line-height:1;color:var(--cyan);letter-spacing:-.01em}
+  .stat .l{font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-top:.55rem}
+  .live{display:inline-flex;align-items:center;gap:.45rem;font-size:.72rem;color:var(--ok);margin-top:1.1rem}
+  .live .dot{width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok);animation:pulse 2s infinite}
+
+  .get{display:grid;grid-template-columns:1.1fr 1fr;gap:2.5rem;align-items:center}
+  pre.code{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:1.2rem;font-size:.82rem;line-height:1.85;overflow-x:auto}
+  pre.code .c{color:var(--dim)}pre.code .p{color:var(--ok)}pre.code .f{color:var(--cyan)}
+
+  footer{border-top:1px solid var(--line);padding:3rem 0;color:var(--dim);font-size:.82rem}
+  footer .row{display:flex;flex-wrap:wrap;gap:1rem;justify-content:space-between;align-items:center}
+  footer a{color:var(--mut)}footer a:hover{color:var(--cyan)}
+  .privacy{display:inline-flex;gap:.45rem;align-items:center;color:var(--mut)}
+
+  @media (max-width:860px){
+    .hero{grid-template-columns:1fr;gap:2.2rem;padding:3.5rem 0 2.5rem}
+    .flow{grid-template-columns:1fr 1fr}.arrow{display:none}
+    .scope,.get{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}
+    nav .links a.hideable{display:none}
+  }
+  @media (prefers-reduced-motion:reduce){.ln{opacity:1;animation:none}.cur{animation:none}*{scroll-behavior:auto}}
 </style>
+</head>
 <body>
-<div class="wrap">
-  <h1>tunnel.locker</h1>
-  <div class="tag">ephemeral, capability-scoped tunnels for a locally-running MCP server</div>
+<div class="grain"></div>
 
-  <p class="wedge">ngrok exposes a <i>port</i>. tunnel.locker knows the far end is an <b>MCP server with a tool list</b>, so it's <b>MCP-aware, ephemeral, and capability-scoped</b>: it filters the advertised tools to a <code>--scope</code> allowlist, refuses any out-of-scope call agent-side, and enforces a TTL on every call — so revocation is real, not cosmetic.</p>
+<nav><div class="wrap row">
+  <div class="brand">tunnel<b>.locker</b></div>
+  <div class="links">
+    <a href="#how" class="hideable">how it works</a>
+    <a href="/stats" class="hideable">stats</a>
+    <a href="https://github.com/mcfearsome/tunnel-solutions">github</a>
+    <a href="#get" class="ghost">install</a>
+  </div>
+</div></nav>
 
-  <h2>live</h2>
+<header class="wrap hero">
+  <div>
+    <span class="eyebrow"><span class="dot"></span> capability-scoped &middot; ephemeral</span>
+    <h1>A disposable door<br>to one <span class="em">running</span> agent.
+      <span class="mono">// share specific tools from your local MCP server &mdash; over a link that evaporates.</span>
+    </h1>
+    <p class="lede">ngrok exposes a <b>port</b>. tunnel.locker knows the far end is an <b>MCP server with a tool list</b> &mdash; so the door is scoped to the exact tools you allow, refuses everything else agent-side, and dies on a TTL.</p>
+    <div class="cta">
+      <button class="install" id="install" title="click to copy"><span class="pr">$</span> cargo install tunnel-locker <span class="cp" id="cp">copy</span></button>
+      <a href="https://github.com/mcfearsome/tunnel-solutions" class="btn">View source &rarr;</a>
+    </div>
+  </div>
+
+  <div class="term" aria-hidden="true">
+    <div class="bar"><i></i><i></i><i></i><span>tunnel — zsh</span></div>
+    <div class="body">
+      <div class="ln cmd" style="--i:0"><span class="pr">$</span> tunnel open ./mcp-server <span class="fl">--relay wss://tunnel.locker --scope read</span></div>
+      <div class="ln" style="--i:1">&nbsp;</div>
+      <div class="ln mut" style="--i:2">  tunnel.locker</div>
+      <div class="ln mut" style="--i:3">  &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;</div>
+      <div class="ln" style="--i:4">  handshake  <span class="ok">&#10003;</span>  MCP initialize &mdash; 2 tools advertised</div>
+      <div class="ln" style="--i:5">  scope      <span class="accent">read</span>   <span class="mut">(1 of 2 in scope)</span></div>
+      <div class="ln" style="--i:6">  token      <span class="ok">&#10003;</span>  minted</div>
+      <div class="ln" style="--i:7">  link  <span class="accent">&rarr;</span>    https://tunnel.locker/t/3f9a8c&hellip;</div>
+      <div class="ln" style="--i:8">&nbsp;</div>
+      <div class="ln mut" style="--i:9">  serving &mdash; a teammate opens the link&hellip;</div>
+      <div class="ln" style="--i:10">  <span class="accent">&#9656;</span> read  <span class="mut">notes.txt</span>          <span class="ok">&#10003; ok</span></div>
+      <div class="ln" style="--i:11">  <span class="accent">&#9656;</span> shell <span class="mut">"rm -rf /"</span>        <span class="bad">&#8856; refused &mdash; out of scope</span><span class="cur"></span></div>
+    </div>
+  </div>
+</header>
+
+<section class="wrap">
+  <div class="kicker">the wedge</div>
+  <div class="pull">Tunneling isn't new. Making the far end <span class="it">MCP-aware</span> is.</div>
+  <p class="sub">Because the agent speaks the protocol, it filters the advertised <code>tools/list</code> to your allowlist, rejects any out-of-scope <code>tools/call</code> <b>before the server ever sees it</b>, and re-checks the TTL on every call. Revocation is real, not cosmetic &mdash; close the tunnel and the link is dead.</p>
+</section>
+
+<section class="wrap" id="how">
+  <div class="kicker">how it works</div>
+  <div class="pull" style="font-size:clamp(1.4rem,2.8vw,2rem)">Three parts. The relay is <span class="am">dumb</span> on purpose.</div>
+  <div class="flow">
+    <div class="node"><span class="tag">browser</span><h4>viewer</h4><p>A teammate opens the link. Sees only the filtered tool list.</p><div class="arrow">&rarr;</div></div>
+    <div class="node"><span class="tag">stateless</span><h4>relay</h4><p>Pairs the two sockets by id and shuttles opaque frames. Holds no secret, no state.</p><div class="arrow">&rarr;</div></div>
+    <div class="node smart"><span class="tag">enforces</span><h4>agent</h4><p>Mints the token, filters tools, refuses out-of-scope calls, enforces the TTL.</p><div class="arrow">&rarr;</div></div>
+    <div class="node"><span class="tag">your machine</span><h4>MCP server</h4><p>Runs locally, unchanged. No inbound port is ever opened.</p></div>
+  </div>
+  <p class="trust"><b>Trust lives at the agent</b> &mdash; the only component holding the signing secret. A compromised relay can't widen scope or extend a TTL; it just moves bytes.</p>
+</section>
+
+<section class="wrap">
+  <div class="kicker">capability scoping</div>
+  <div class="pull" style="font-size:clamp(1.4rem,2.8vw,2rem)">Hiding a tool is easy. <span class="it">Refusing</span> it is the point.</div>
+  <div class="scope">
+    <div class="card allow"><div class="glow"></div>
+      <div class="ic">&#10003;</div><h4>in scope</h4>
+      <code>read { "path": "notes.txt" }</code>
+      <p>Passes the allowlist + TTL check, reaches the MCP server, returns the result.</p>
+    </div>
+    <div class="card deny"><div class="glow"></div>
+      <div class="ic">&#8856;</div><h4>out of scope</h4>
+      <code>shell { "cmd": "rm -rf /" }</code>
+      <p>Refused agent-side with a clear error. The server never receives the call.</p>
+    </div>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="kicker">live</div>
+  <div class="pull" style="font-size:clamp(1.4rem,2.8vw,2rem)">Running in the open. No trackers, no cookies.</div>
   <div class="stats" id="stats">
-    <div class="stat"><div class="n" data-k="unique_visitors">·</div><div class="l">visitors</div></div>
-    <div class="stat"><div class="n" data-k="tunnels_opened">·</div><div class="l">tunnels</div></div>
-    <div class="stat"><div class="n" data-k="tool_calls">·</div><div class="l">tool calls</div></div>
-    <div class="stat"><div class="n" data-k="out_of_scope_blocks">·</div><div class="l">blocked</div></div>
+    <div class="stat"><div class="n" data-k="unique_visitors">0</div><div class="l">visitors</div></div>
+    <div class="stat"><div class="n" data-k="tunnels_opened">0</div><div class="l">tunnels opened</div></div>
+    <div class="stat"><div class="n" data-k="tool_calls">0</div><div class="l">tool calls</div></div>
+    <div class="stat"><div class="n" data-k="out_of_scope_blocks">0</div><div class="l">blocked</div></div>
   </div>
-  <div class="foot"><a href="/stats">full stats →</a></div>
+  <div class="live"><span class="dot"></span> live from the relay &middot; <a href="/stats" style="color:var(--mut)">full stats &rarr;</a></div>
+</section>
 
-  <h2>try it</h2>
-  <pre><span class="comment"># install</span>
-<span class="prompt">$</span> cargo install tunnel-locker
+<section class="wrap" id="get">
+  <div class="kicker">get started</div>
+  <div class="get">
+    <pre class="code"><span class="c"># install the CLI</span>
+<span class="p">$</span> cargo install tunnel-locker
 
-<span class="comment"># share a read-only view of your MCP server</span>
-<span class="prompt">$</span> tunnel open ./my-mcp-server <span class="accent">--relay wss://tunnel.locker --scope read</span>
-  link  <span class="accent">&rarr;</span>  https://tunnel.locker/t/3f9a8c&hellip;#&lt;token&gt;</pre>
-  <p class="wedge">Open the link as a teammate: in-scope tools work; out-of-scope calls are refused; the link dies on TTL or <code>tunnel close</code>.</p>
+<span class="c"># share a read-only view of your MCP server</span>
+<span class="p">$</span> tunnel open ./my-mcp-server <span class="f">\</span>
+    <span class="f">--relay wss://tunnel.locker --scope read --ttl 15m</span>
 
-  <div class="foot">
-    no third-party trackers &middot; no cookies &middot; the relay holds no state past a session<br>
-    <a href="https://github.com/mcfearsome/tunnel-solutions">github.com/mcfearsome/tunnel-solutions</a>
+<span class="c"># &rarr; prints https://tunnel.locker/t/&lt;id&gt;#&lt;token&gt;</span>
+<span class="c"># revoke anytime:</span>
+<span class="p">$</span> tunnel close</pre>
+    <div>
+      <div class="pull" style="font-size:1.5rem">Local-first,<br>but <span class="it">shareable</span>.</div>
+      <p class="sub" style="margin-top:1rem">Your model and data stay on your machine. When a teammate needs to talk to your running agent, open a door scoped to one session and specific tools &mdash; then let it evaporate.</p>
+    </div>
   </div>
-</div>
+</section>
+
+<footer><div class="wrap row">
+  <span class="privacy">&#9679; no third-party trackers &middot; no cookies &middot; the relay holds no state past a session</span>
+  <span>
+    <a href="https://github.com/mcfearsome/tunnel-solutions">github</a> &nbsp;&middot;&nbsp;
+    <a href="https://crates.io/crates/tunnel-locker">crates.io</a> &nbsp;&middot;&nbsp;
+    <a href="/stats">stats</a>
+  </span>
+</div></footer>
+
 <script>
+  // copy the install command (textContent only)
+  const inst = document.getElementById("install");
+  if (inst) inst.addEventListener("click", () => {
+    navigator.clipboard?.writeText("cargo install tunnel-locker").then(() => {
+      const cp = document.getElementById("cp"); if (!cp) return;
+      cp.textContent = "copied"; cp.style.color = "var(--ok)";
+      setTimeout(() => { cp.textContent = "copy"; cp.style.color = ""; }, 1600);
+    }).catch(() => {});
+  });
+
+  // live stats with a count-up animation (textContent only)
   fetch("/stats.json").then(r => r.json()).then(s => {
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
     document.querySelectorAll("#stats .n[data-k]").forEach(el => {
-      const v = s[el.dataset.k];
-      el.textContent = Number(v ?? 0).toLocaleString();
+      const target = Number(s[el.dataset.k] ?? 0);
+      if (reduce || target === 0) { el.textContent = target.toLocaleString(); return; }
+      const t0 = performance.now(), dur = 1100;
+      requestAnimationFrame(function tick(now) {
+        const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+        el.textContent = Math.round(target * e).toLocaleString();
+        if (p < 1) requestAnimationFrame(tick);
+      });
     });
   }).catch(() => {});
 </script>
