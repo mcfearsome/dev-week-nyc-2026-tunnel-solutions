@@ -22,6 +22,14 @@ pub enum Command {
         #[arg(long, default_value = "./tnls-downloads")]
         out: String,
     },
+    /// Seed a file and share it over a capability-scoped tunnel link.
+    Share {
+        path: String,
+        #[arg(long, default_value = "wss://tunnel.locker")]
+        relay: String,
+        #[arg(long, default_value = "30m")]
+        ttl: String,
+    },
     /// Internal: the MCP server the tunnel spawns.
     #[command(hide = true)]
     McpServe {
