@@ -1,0 +1,12 @@
+[package]
+name = "tnls"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+librqbit = "=9.0.0-rc.0"   # only a pre-release exists; caret "9" won't resolve it
+tokio = { workspace = true }
+anyhow = { workspace = true }
+clap = { version = "4", features = ["derive"] }
+urlencoding = "2"
+bytes = "1"
