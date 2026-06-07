@@ -22,4 +22,11 @@ pub enum Command {
         #[arg(long, default_value = "./tnls-downloads")]
         out: String,
     },
+    /// Internal: the MCP server the tunnel spawns.
+    #[command(hide = true)]
+    McpServe {
+        #[arg(long)] magnet: String,
+        #[arg(long)] name: String,
+        #[arg(long)] size: u64,
+    },
 }

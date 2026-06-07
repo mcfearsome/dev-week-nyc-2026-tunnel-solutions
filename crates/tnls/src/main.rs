@@ -25,6 +25,7 @@ async fn main() -> Result<()> {
             std::future::pending::<()>().await; // seed until killed
             Ok(())
         }
+        Command::McpServe { magnet, name, size } => tnls::mcp_serve::serve(tnls::mcp_serve::ShareInfo { magnet, name, size }).await,
         Command::Fetch { magnet, out } => {
             std::fs::create_dir_all(&out)?;
             let dl = fetch(&magnet, Path::new(&out), NetOpts {
