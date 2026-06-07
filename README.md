@@ -79,5 +79,8 @@ refused.
 
 No persistence (in-memory relay state is a feature — nothing survives the session), no
 accounts (the capability token is the only credential), single viewer per tunnel, `ws://`
-locally (a production relay terminates TLS in front). **Future work:** payload encryption
-beyond the transport, so even the relay operator cannot read tool I/O.
+locally (a production relay terminates TLS in front). The sample `mcp-demo` server does not
+sandbox the `read` tool's path — enforcement lives at the tunnel (scope), not in the demo
+tool. **Future work:** payload encryption beyond the transport, so even the relay operator
+cannot read tool I/O; and per-tool argument policies (e.g. path allowlists) layered on top of
+the capability scope.
