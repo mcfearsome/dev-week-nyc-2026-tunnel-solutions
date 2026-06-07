@@ -57,10 +57,12 @@ New `crates/tnls/` — binary `tnls`. In the existing workspace.
 (rustls TLS — for the `get` viewer over wss), `futures-util`.
 
 **Reuse trick:** `tnls share` calls `tunnel_locker::session::open(OpenArgs {
-server: std::env::current_exe()?, server_args: ["mcp-serve", "--magnet", M, …], relay,
-scope: ["list_shares","request_file"], ttl })`. The agent spawns *this same `tnls` binary* in
-MCP mode as the scoped child. No PATH dependency, no tunnel refactor. (If `session::open`/
-`OpenArgs` need a field or a quiet flag, that's a small, additive change to `tunnel-locker`.)
+server: std::env::current_exe()?.to_string_lossy().into_owned(), server_args: ["mcp-serve",
+"--magnet", M, …], relay, scope: ["list_shares","request_file"], ttl })` — `OpenArgs.server` is
+a `String`, so the `PathBuf` from `current_exe()` is coerced. The agent spawns *this same
+`tnls` binary* in MCP mode as the scoped child. No PATH dependency, no tunnel refactor. (If
+`session::open`/`OpenArgs` need a field or a quiet flag, that's a small, additive change to
+`tunnel-locker`.)
 
 ## 4. BitTorrent core (`bittorrent.rs`) — Phase 1
 
@@ -107,10 +109,19 @@ The tunnel opens with `--scope list_shares,request_file` so a viewer can do only
 
 ### 6.2 `tnls get <link>` (Phase 2) — a headless viewer
 1. Parse `https://tnls.to/t/<id>#<token>` → `id`, `token`; derive `wss://tnls.to/viewer/<id>`.
-2. Connect (rustls wss), send `{"type":"hello","token":…}`, await `ready` + `tools`.
-3. Send `{"type":"call","id":1,"tool":"request_file","args":{}}`; await `result` → extract the
-   magnet from the MCP content. (On `error{out_of_scope|expired|unauthorized}` → fail with a
-   clear message.)
+2. Connect (rustls wss), send `{"type":"hello","token":…}`. Read frames in a **loop** until
+   **both** a `ready` and a `tools` frame have arrived — the relay forwards them as two
+   separate frames and does not buffer/combine. (Because the `share` link is printed only
+   *after* the agent has dialed the relay, the agent side is already present when `get` runs;
+   if `get` ever connects first, the relay silently drops the early `hello`, so retry `hello`
+   once after a short delay.)
+3. Send `{"type":"call","id":1,"tool":"request_file","args":{}}`; read until the matching
+   `result` → extract the magnet from the MCP content. Errors arrive on the wire as
+   `{"type":"error","code":"<c>", …}` where `<c>` ∈ {`out_of_scope`, `expired`, `unauthorized`,
+   `tool_error`, `bad_request`} — i.e. `AgentFrame::Error { code, tool?, message? }` with a
+   snake_case `code` (not a pipe-delimited string). Decode it (reuse the `frame` types if they
+   become a shared crate, else a local mirror) and fail with a clear message. If the socket
+   closes before `ready`, report "link dead".
 4. `fetch(magnet, out_dir)` → render progress to the terminal; verify on completion.
 
 `tnls get` is the first non-browser viewer of the tunnel protocol — it reuses the relay + the
@@ -173,8 +184,11 @@ defaults `--relay wss://tnls.to`.
 ## 12. Testing
 
 - `bittorrent.rs`: integration test — seed temp file (session A) → fetch magnet (session B) →
-  assert byte-equality. (Marked `#[ignore]` if it needs network/UPnP; provide a loopback-only
-  variant if librqbit supports it.)
+  assert byte-equality, ideally over loopback/DHT-disabled so it's hermetic. If librqbit can't
+  do a self-contained two-session transfer in-test, the **Phase 1 gate** falls back to: (a) a
+  unit test that creating a torrent from a fixed file yields a **stable infohash** and a
+  round-trippable magnet, plus (b) a documented manual two-terminal `seed`↔`fetch` on
+  localhost. The network transfer test is then `#[ignore]`d (run on demand).
 - `mcp_serve.rs`: pure `dispatch(req) -> Option<Value>` unit tests (tool list, request_file
   returns the magnet, unknown method).
 - `get.rs`: link parsing (`/t/<id>#<token>` → id+token) + viewer-frame (de)serialization unit
