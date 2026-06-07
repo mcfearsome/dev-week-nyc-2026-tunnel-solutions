@@ -22,6 +22,12 @@ pub enum Command {
         #[arg(long, default_value = "./tnls-downloads")]
         out: String,
     },
+    /// Get a shared file from a scoped tunnel link.
+    Get {
+        link: String,
+        #[arg(long, default_value = "./tnls-downloads")]
+        out: String,
+    },
     /// Seed a file and share it over a capability-scoped tunnel link.
     Share {
         path: String,
