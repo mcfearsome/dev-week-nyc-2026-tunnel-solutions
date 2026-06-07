@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use futures_util::{SinkExt, StreamExt};
-use protocol::{
+use tunnel_locker_core::{
     decide_call, filter_tools, mint, verify, AgentFrame, CallDecision, Claims, ErrorCode,
     TokenError, Tool, ViewerFrame,
 };

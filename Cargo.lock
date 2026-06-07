@@ -3,27 +3,6 @@
 version = 4
 
 [[package]]
-name = "agent"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum",
- "clap",
- "futures-util",
- "getrandom 0.2.17",
- "hex",
- "humantime",
- "nix",
- "protocol",
- "relay",
- "rustls",
- "serde",
- "serde_json",
- "tokio",
- "tokio-tungstenite 0.23.1",
-]
-
-[[package]]
 name = "anstream"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -681,20 +660,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "protocol"
-version = "0.1.0"
-dependencies = [
- "base64",
- "hmac",
- "humantime",
- "serde",
- "serde_json",
- "sha2",
- "subtle",
- "thiserror",
-]
-
-[[package]]
 name = "quote"
 version = "1.0.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -746,7 +711,6 @@ dependencies = [
  "anyhow",
  "axum",
  "futures-util",
- "protocol",
  "serde",
  "serde_json",
  "tokio",
@@ -1140,6 +1104,41 @@ dependencies = [
  "sha1",
  "thiserror",
  "utf-8",
+]
+
+[[package]]
+name = "tunnel-locker"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "clap",
+ "futures-util",
+ "getrandom 0.2.17",
+ "hex",
+ "humantime",
+ "nix",
+ "relay",
+ "rustls",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite 0.23.1",
+ "tunnel-locker-core",
+]
+
+[[package]]
+name = "tunnel-locker-core"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "hmac",
+ "humantime",
+ "serde",
+ "serde_json",
+ "sha2",
+ "subtle",
+ "thiserror",
 ]
 
 [[package]]

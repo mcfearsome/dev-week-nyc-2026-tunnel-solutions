@@ -11,7 +11,7 @@ fn mcp_demo_bin() -> String {
 
 #[tokio::test]
 async fn handshake_lists_tools_and_calls_shell() {
-    let mut child = agent::mcp::McpChild::spawn(&mcp_demo_bin(), &[]).await.unwrap();
+    let mut child = tunnel_locker::mcp::McpChild::spawn(&mcp_demo_bin(), &[]).await.unwrap();
 
     let names: Vec<String> = child.tools.iter().map(|t| t.name.clone()).collect();
     assert_eq!(names, vec!["read".to_string(), "shell".to_string()]);

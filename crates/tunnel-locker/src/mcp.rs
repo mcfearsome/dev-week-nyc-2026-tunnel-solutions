@@ -17,7 +17,7 @@ pub struct McpChild {
     stdin: ChildStdin,
     pending: Pending,
     next_id: AtomicU64,
-    pub tools: Vec<protocol::Tool>,
+    pub tools: Vec<tunnel_locker_core::Tool>,
 }
 
 impl McpChild {

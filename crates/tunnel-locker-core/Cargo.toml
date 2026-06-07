@@ -1,0 +1,18 @@
+[package]
+name = "tunnel-locker-core"
+version = "0.1.0"
+edition = "2021"
+description = "Core types for tunnel.locker: HMAC capability tokens, scope/TTL enforcement, and the viewer-agent frame protocol."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/mcfearsome/tunnel-solutions"
+keywords = ["mcp", "tunnel", "capability", "websocket"]
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+hmac = "0.12"
+sha2 = "0.10"
+base64 = "0.22"
+subtle = "2"
+humantime = "2"
+thiserror = "1"

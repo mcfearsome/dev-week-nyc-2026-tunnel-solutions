@@ -34,7 +34,7 @@ cargo run -p relay
 
 # 2. open a 2-minute, read-only tunnel to the sample MCP server (in another terminal)
 cargo build -p mcp-demo
-cargo run -p agent -- open ./target/debug/mcp-demo --ttl 2m --scope read
+cargo run -p tunnel-locker -- open ./target/debug/mcp-demo --ttl 2m --scope read
 #   → prints a link like http://127.0.0.1:8787/t/<id>#<token>
 
 # 3. open the link as a "teammate" in a browser:
@@ -42,7 +42,7 @@ cargo run -p agent -- open ./target/debug/mcp-demo --ttl 2m --scope read
 #      - raw-call `shell` {"cmd":"echo hi"}   → refused, out of scope
 #
 # 4. let the 2-minute TTL lapse → the link goes dead live,
-#    or run `cargo run -p agent -- close` from a third terminal to revoke on demand.
+#    or run `cargo run -p tunnel-locker -- close` from a third terminal to revoke on demand.
 ```
 
 Or just: `./demo.sh` (boots the relay and opens the tunnel; Ctrl-C tears down).

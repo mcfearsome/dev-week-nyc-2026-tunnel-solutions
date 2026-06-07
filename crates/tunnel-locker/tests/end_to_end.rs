@@ -54,14 +54,14 @@ async fn read_succeeds_shell_refused() {
 
     // tunnel open --scope read
     let mcp = format!("{}/../../target/debug/mcp-demo", env!("CARGO_MANIFEST_DIR"));
-    let open = agent::session::OpenArgs {
+    let open = tunnel_locker::session::OpenArgs {
         server: mcp,
         server_args: vec![],
         ttl: Duration::from_secs(120),
         scope: vec!["read".into()],
         relay: relay_url.clone(),
     };
-    tokio::spawn(async move { agent::session::open(open).await.unwrap(); });
+    tokio::spawn(async move { tunnel_locker::session::open(open).await.unwrap(); });
 
     let (id, token) = read_link(port).await;
     let (mut v, _) = tokio_tungstenite::connect_async(format!("{relay_url}/viewer/{id}")).await.unwrap();

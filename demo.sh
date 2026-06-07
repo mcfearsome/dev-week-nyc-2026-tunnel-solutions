@@ -5,7 +5,7 @@ set -euo pipefail
 TTL="${TTL:-2m}"
 SCOPE="${SCOPE:-read}"
 
-cargo build -p relay -p mcp-demo -p agent
+cargo build -p relay -p mcp-demo -p tunnel-locker
 
 cargo run -q -p relay &
 RELAY_PID=$!
@@ -17,4 +17,4 @@ for _ in $(seq 1 50); do
 done
 
 echo "relay up (pid $RELAY_PID). opening tunnel: --ttl $TTL --scope $SCOPE"
-cargo run -q -p agent -- open ./target/debug/mcp-demo --ttl "$TTL" --scope "$SCOPE"
+cargo run -q -p tunnel-locker -- open ./target/debug/mcp-demo --ttl "$TTL" --scope "$SCOPE"
