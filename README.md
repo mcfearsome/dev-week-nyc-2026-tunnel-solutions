@@ -59,9 +59,9 @@ HTTP request line to the relay.
 
 | Crate | Role |
 |-------|------|
-| `protocol` | Pure core: token, scope filter, per-call decision, TTL parse, frames. |
+| `tunnel-locker-core` | Pure core: token, scope filter, per-call decision, TTL parse, frames. |
 | `relay` | Axum WS pairing service (binary: `relay`). |
-| `agent` | The CLI (binary: `tunnel`): spawns the MCP child, enforces scope + TTL. |
+| `tunnel-locker` | The CLI (binary: `tunnel`): spawns the MCP child, enforces scope + TTL. |
 | `mcp-demo` | Sample MCP server exposing `read` + `shell` (binary: `mcp-demo`). |
 | `viewer/index.html` | Static viewer, no build step. |
 
@@ -71,8 +71,8 @@ HTTP request line to the relay.
 cargo test --workspace
 ```
 
-The correctness core (`protocol`) is unit-tested exhaustively; `relay` has an in-process WS
-pairing test; `agent` has a real-socket end-to-end test proving `read` succeeds and `shell` is
+The correctness core (`tunnel-locker-core`) is unit-tested exhaustively; `relay` has an in-process WS
+pairing test; `tunnel-locker` has a real-socket end-to-end test proving `read` succeeds and `shell` is
 refused.
 
 ## Non-goals & future work
