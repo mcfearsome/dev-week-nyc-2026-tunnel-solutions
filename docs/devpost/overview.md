@@ -6,7 +6,9 @@
 
 ## Elevator Pitch
 
-**tnls is a pluggable host for ephemeral, capability-scoped tunnels to local MCP servers.** Wrap a local MCP server, hand a teammate a link scoped to exactly the tools you allow for exactly as long as you allow — and it evaporates on close or TTL. Every capability is a **plugin**: the first, `rendezvous`, sends large files over BitTorrent, so the bytes move peer-to-peer (you don't eat the bandwidth) while the tunnel gates who can fetch and for how long. One audited security boundary — the agent — holds the secret; the relay only moves opaque bytes.
+_Devpost caps this field at 200 characters — the pitch below is 181._
+
+A pluggable host for ephemeral, capability-scoped tunnels to local MCP servers. Share only the tools you allow, on a link that expires. First plugin: send big files over BitTorrent.
 
 **Live at https://tunnel.locker** · Rust · official MCP SDK (`rmcp`) · no inbound ports.
 
