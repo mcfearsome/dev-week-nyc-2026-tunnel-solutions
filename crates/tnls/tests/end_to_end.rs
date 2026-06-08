@@ -23,7 +23,7 @@ async fn read_link(relay_port: u16) -> String {
 }
 
 #[tokio::test]
-async fn get_retrieves_the_magnet_through_the_tunnel() {
+async fn get_transfers_the_file_through_the_tunnel() {
     build("tnls"); // the agent spawns target/debug/tnls mcp-serve
 
     // local relay
@@ -46,12 +46,23 @@ async fn get_retrieves_the_magnet_through_the_tunnel() {
     };
     tokio::spawn(async move { let _ = tnls::share::run_share(share).await; });
 
-    // get the link share published, then retrieve the magnet through the tunnel
+    // get the link share published, then retrieve the magnet + peers through the tunnel
     let link = read_link(port).await;
-    let (magnet, _name) = tokio::time::timeout(Duration::from_secs(20), tnls::get::retrieve_magnet(&link))
+    let rf = tokio::time::timeout(Duration::from_secs(20), tnls::get::retrieve_magnet(&link))
         .await.expect("retrieve timed out").expect("retrieve failed");
+    assert!(rf.magnet.starts_with("magnet:?xt=urn:btih:"), "got {}", rf.magnet);
+    assert!(rf.peers.iter().any(|p| p.ip().is_loopback()), "must advertise a loopback peer: {:?}", rf.peers);
 
-    assert!(magnet.starts_with("magnet:?xt=urn:btih:"), "got: {magnet}");
-    // and it must be refused out of scope: a tool not granted
+    // download via the advertised loopback peer → completes directly (no DHT)
+    let out = dir.join("dl");
+    std::fs::create_dir_all(&out).unwrap();
+    let dl = tnls::bittorrent::fetch(&rf.magnet, &out, tnls::bittorrent::NetOpts {
+        disable_dht: true, listen_port: None, enable_upnp: false, initial_peers: rf.peers,
+    }).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(40), dl.wait())
+        .await.expect("download timed out").expect("download errored");
+    let got = std::fs::read(out.join("doc.bin")).unwrap();
+    assert_eq!(got, b"phase two end to end", "transferred bytes must match the source");
+
     let _ = std::fs::remove_dir_all(&dir);
 }
