@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "Core types for tunnel.locker: HMAC capability tokens, scope/TTL enforcement, and the viewer-agent frame protocol."
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/mcfearsome/tunnel-solutions"
+repository = "https://github.com/mcfearsome/dev-week-nyc-2026-tunnel-solutions"
 keywords = ["mcp", "tunnel", "capability", "websocket"]
 
 [dependencies]

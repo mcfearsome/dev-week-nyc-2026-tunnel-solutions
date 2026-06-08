@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "Ephemeral, capability-scoped tunnel for a local MCP server — share specific tools with a teammate over a disposable link."
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/mcfearsome/tunnel-solutions"
+repository = "https://github.com/mcfearsome/dev-week-nyc-2026-tunnel-solutions"
 keywords = ["mcp", "tunnel", "cli", "websocket", "capability"]
 
 [dependencies]

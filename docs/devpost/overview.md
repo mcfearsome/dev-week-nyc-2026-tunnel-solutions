@@ -15,7 +15,7 @@ A pluggable host for ephemeral, capability-scoped tunnels to local MCP servers. 
 ## Links
 
 - Live relay + landing page: https://tunnel.locker
-- Source: https://github.com/mcfearsome/tunnel-solutions
+- Source: https://github.com/mcfearsome/dev-week-nyc-2026-tunnel-solutions
 - Design specs + phased implementation plans: `docs/superpowers/`
 
 ## Note on architecture state
