@@ -12,22 +12,25 @@ use axum::{
     routing::get,
     Router,
 };
+use backplane::{max_tunnels, Backplane, LocalBackplane};
 use futures_util::StreamExt;
-use pairing::{run_side, Registry, Role};
+use pairing::{run_side, Role};
 use stats::Stats;
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Mutex;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub registry: Registry,
+    pub backplane: Arc<dyn Backplane>,
     pub stats: Arc<Stats>,
 }
 
 pub fn build_app() -> Router {
+    build_app_with(Arc::new(LocalBackplane::new(max_tunnels())))
+}
+
+pub fn build_app_with(backplane: Arc<dyn Backplane>) -> Router {
     let mut salt = [0u8; 8];
     let _ = getrandom::getrandom(&mut salt);
     let stats = Arc::new(Stats::new(
@@ -46,10 +49,7 @@ pub fn build_app() -> Router {
         });
     }
 
-    let state = AppState {
-        registry: Arc::new(Mutex::new(HashMap::new())),
-        stats,
-    };
+    let state = AppState { backplane, stats };
 
     Router::new()
         .route("/", get(landing_page))
@@ -100,16 +100,24 @@ async fn viewer_page(State(s): State<AppState>) -> impl IntoResponse {
 
 const MAX_WS_MESSAGE: usize = 1 << 20; // 1 MiB — guard against a frame-bomb OOM.
 
-async fn agent_ws(Path(id): Path<String>, State(s): State<AppState>, ws: WebSocketUpgrade) -> impl IntoResponse {
+async fn agent_ws(
+    Path(id): Path<String>,
+    State(s): State<AppState>,
+    ws: WebSocketUpgrade,
+) -> impl IntoResponse {
     ws.max_message_size(MAX_WS_MESSAGE)
         .max_frame_size(MAX_WS_MESSAGE)
-        .on_upgrade(move |socket| run_side(s.registry, s.stats, id, Role::Agent, socket))
+        .on_upgrade(move |socket| run_side(s.backplane, s.stats, id, Role::Agent, socket))
 }
 
-async fn viewer_ws(Path(id): Path<String>, State(s): State<AppState>, ws: WebSocketUpgrade) -> impl IntoResponse {
+async fn viewer_ws(
+    Path(id): Path<String>,
+    State(s): State<AppState>,
+    ws: WebSocketUpgrade,
+) -> impl IntoResponse {
     ws.max_message_size(MAX_WS_MESSAGE)
         .max_frame_size(MAX_WS_MESSAGE)
-        .on_upgrade(move |socket| run_side(s.registry, s.stats, id, Role::Viewer, socket))
+        .on_upgrade(move |socket| run_side(s.backplane, s.stats, id, Role::Viewer, socket))
 }
 
 /// Aggregate-only usage report from an agent on shutdown: one JSON message `{calls, blocks}`.
