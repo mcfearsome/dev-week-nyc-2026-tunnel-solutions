@@ -13,7 +13,7 @@ The README documents only `tunnel-locker`. There are **two** CLIs:
 | `tunnel` | `tunnel-locker` | Original: scoped tunnel to a local MCP server (filters `tools/list`, refuses out-of-scope `tools/call`, enforces TTL). | Stable |
 | `tnls`   | `tnls`          | Newer: seed a file over BitTorrent + hand out the magnet through a scoped tunnel. Built **on top of** `tunnel-locker`. | Active dev |
 
-Current work happens in `tnls` (BitTorrent + peer rendezvous). Don't assume the README is current.
+Recent work: `tnls` (BitTorrent + peer rendezvous — built & tested) and the **Redis multi-machine relay** (built & verified cross-instance; live rollout in progress). Don't assume the README is current.
 
 ## Commands
 
@@ -64,10 +64,10 @@ docs/superpowers/      Design specs + phased implementation plans (see Design do
 
 - **README is behind the code** — it covers `tunnel-locker` only and omits `tnls`. Trust the crates + `docs/superpowers/`.
 - **`librqbit` is pinned to `=9.0.0-rc.0`** (`crates/tnls/Cargo.toml`) — only a pre-release exists, so caret `9` won't resolve. Don't loosen without checking crates.io.
-- **The relay is single-instance / in-memory** — viewer and agent must hit the *same* process (registry is a local HashMap). `fly.toml` pins 1 machine; don't scale horizontally. The Redis backplane that would allow it is designed but **not implemented** (`docs/superpowers/specs/2026-06-07-redis-relay-design.md`).
+- **The relay pairs via a pluggable `Backplane`** (`crates/relay/src/backplane.rs`): `LocalBackplane` (in-memory, single-instance, zero deps — the default when `REDIS_URL` is unset) and `RedisBackplane` (cross-instance via Redis pub/sub + presence keys, enabled by `REDIS_URL`). Cross-instance pairing is proven by `tests/cross_instance.rs` (one shared backplane, two in-process apps) and against a real `redis-server`. `main.rs` connects Redis with a 10s timeout and **falls back to Local + logs loudly** on failure, so a bad `REDIS_URL` degrades to single-instance rather than an outage. The live multi-machine rollout is in progress (rustls TLS → managed Redis); keep `fly.toml` at 1 machine until `REDIS_URL` (a `rediss://` URL) is set and the app is scaled.
 - **`tnls mcp-serve` is internal** (hidden subcommand) — the tunnel spawns it during `tnls share`; never run it by hand.
 - **Editing `viewer/*.html` needs a relay rebuild** — the HTML is `include_str!`'d into the binary at compile time.
-- **No CI, no fmt/clippy config.** Run `cargo fmt` / `cargo clippy --workspace` / `cargo test --workspace` yourself before calling work done.
+- **CI is live** (GitHub Actions: fmt check, clippy, test matrix, audit, Fly deploy). No repo fmt/clippy config (defaults apply), but run `cargo fmt --all` / `cargo clippy --workspace` / `cargo test --workspace` locally before pushing — the **fmt check will fail CI** otherwise.
 
 ## Deploy
 
@@ -79,5 +79,7 @@ plain `ws` internally and binds `$PORT` (8080 on Fly). Aggregate stats persist t
 ## Design docs
 
 `docs/superpowers/specs/` (designs, each with a **Status** header) and `.../plans/` (phased
-plans). Current trajectory: `tnls` Phase 2 (magnet-through-tunnel) is done and e2e-tested;
-Phase 2.5 (peer **rendezvous**) and the **Redis relay** backplane are approved but not yet built.
+plans). Current state: `tnls` Phases 1–2 (BitTorrent core + magnet-through-tunnel) and Phase 2.5
+(peer **rendezvous** — the seeder advertises its address through the tunnel so transfers connect
+directly instead of waiting on DHT) are **built and tested**; the **Redis relay** backplane is
+**built and verified cross-instance**, with the live multi-machine rollout in progress.
