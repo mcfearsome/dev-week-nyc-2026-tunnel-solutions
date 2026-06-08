@@ -12,6 +12,8 @@ anyhow.workspace = true
 futures-util.workspace = true
 axum = { version = "0.7", features = ["ws"] }
 getrandom = "0.2"
+async-trait = "0.1"
+bytes = "1"
 
 [dev-dependencies]
 tokio-tungstenite = "0.23"

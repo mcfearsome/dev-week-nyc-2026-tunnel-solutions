@@ -1,3 +1,4 @@
+pub mod backplane;
 pub mod pairing;
 pub mod stats;
 
