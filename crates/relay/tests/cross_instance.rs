@@ -20,10 +20,9 @@ async fn frame_bridges_across_two_instances() {
     let b = serve(shared.clone()).await; // instance B (same backplane)
 
     // agent connects to A, viewer to B
-    let (mut agent, _) =
-        tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{a}/agent/tid"))
-            .await
-            .unwrap();
+    let (mut agent, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{a}/agent/tid"))
+        .await
+        .unwrap();
     tokio::time::sleep(Duration::from_millis(50)).await;
     let (mut viewer, _) =
         tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{b}/viewer/tid"))

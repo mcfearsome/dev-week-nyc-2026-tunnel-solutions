@@ -35,7 +35,11 @@ async fn gather_peers(port: u16, relay: &str) -> Vec<String> {
         }
     }
     // public IP via the relay's /whoami (https for wss relay, http for ws)
-    let scheme = if relay.starts_with("wss://") { "https" } else { "http" };
+    let scheme = if relay.starts_with("wss://") {
+        "https"
+    } else {
+        "http"
+    };
     let host = relay
         .trim_start_matches("ws://")
         .trim_start_matches("wss://")
@@ -62,11 +66,23 @@ pub async fn run_share(args: ShareArgs) -> Result<()> {
 
     // Seed in the background for the lifetime of this process.
     let seed_meta = meta.clone();
-    let _seeder = seed(&seed_meta, &data_dir, NetOpts {
-        disable_dht: false, listen_port: Some(port), enable_upnp: true, initial_peers: vec![],
-    }).await.context("start seeding")?;
+    let _seeder = seed(
+        &seed_meta,
+        &data_dir,
+        NetOpts {
+            disable_dht: false,
+            listen_port: Some(port),
+            enable_upnp: true,
+            initial_peers: vec![],
+        },
+    )
+    .await
+    .context("start seeding")?;
 
-    println!("seeding {} ({} bytes) — opening a scoped link…", meta.name, meta.size);
+    println!(
+        "seeding {} ({} bytes) — opening a scoped link…",
+        meta.name, meta.size
+    );
 
     // Reuse the tunnel: point the agent at the `tnls` binary in mcp-serve mode.
     let exe = match &args.mcp_exe {
@@ -75,11 +91,17 @@ pub async fn run_share(args: ShareArgs) -> Result<()> {
     };
     let mut server_args = vec![
         "mcp-serve".into(),
-        "--magnet".into(), meta.magnet.clone(),
-        "--name".into(), meta.name.clone(),
-        "--size".into(), meta.size.to_string(),
+        "--magnet".into(),
+        meta.magnet.clone(),
+        "--name".into(),
+        meta.name.clone(),
+        "--size".into(),
+        meta.size.to_string(),
     ];
-    for a in &peers { server_args.push("--peer".into()); server_args.push(a.clone()); }
+    for a in &peers {
+        server_args.push("--peer".into());
+        server_args.push(a.clone());
+    }
 
     tunnel_locker::session::open(tunnel_locker::session::OpenArgs {
         server: exe,
@@ -87,6 +109,7 @@ pub async fn run_share(args: ShareArgs) -> Result<()> {
         ttl: args.ttl,
         scope: vec!["list_shares".into(), "request_file".into()],
         relay: args.relay,
-    }).await?; // blocks until the tunnel is revoked (Ctrl-C / TTL); _seeder drops, seeding stops.
+    })
+    .await?; // blocks until the tunnel is revoked (Ctrl-C / TTL); _seeder drops, seeding stops.
     Ok(())
 }

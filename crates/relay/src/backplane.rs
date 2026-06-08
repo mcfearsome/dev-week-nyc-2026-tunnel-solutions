@@ -141,7 +141,8 @@ mod tests {
             Err(RegisterError::Occupied)
         );
         // agent → viewer
-        bp.forward("t", Role::Agent, Bytes::from_static(b"hi")).await;
+        bp.forward("t", Role::Agent, Bytes::from_static(b"hi"))
+            .await;
         match vrx.recv().await.unwrap() {
             Delivery::Frame(b) => assert_eq!(&b[..], b"hi"),
             _ => panic!(),

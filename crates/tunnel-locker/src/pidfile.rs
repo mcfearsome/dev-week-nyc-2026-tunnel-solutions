@@ -28,10 +28,17 @@ pub fn remove(tunnel_id: &str) {
 /// Returns (pid, tunnel_id) from a specific or the latest pidfile.
 pub fn read(tunnel_id: Option<&str>) -> Result<(i32, String)> {
     let path = tunnel_id.map(pidfile_path).unwrap_or_else(latest_path);
-    let body = std::fs::read_to_string(&path)
-        .map_err(|_| anyhow!("no tunnel pidfile at {} (is a tunnel open?)", path.display()))?;
+    let body = std::fs::read_to_string(&path).map_err(|_| {
+        anyhow!(
+            "no tunnel pidfile at {} (is a tunnel open?)",
+            path.display()
+        )
+    })?;
     let mut lines = body.lines();
-    let pid: i32 = lines.next().ok_or_else(|| anyhow!("empty pidfile"))?.parse()?;
+    let pid: i32 = lines
+        .next()
+        .ok_or_else(|| anyhow!("empty pidfile"))?
+        .parse()?;
     let id = lines.next().unwrap_or("").to_string();
     Ok((pid, id))
 }

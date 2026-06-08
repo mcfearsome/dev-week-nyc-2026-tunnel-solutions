@@ -36,9 +36,7 @@ pub async fn run_side(
             match d {
                 Delivery::Frame(b) => {
                     if sink
-                        .send(Message::Text(
-                            String::from_utf8_lossy(&b).into_owned(),
-                        ))
+                        .send(Message::Text(String::from_utf8_lossy(&b).into_owned()))
                         .await
                         .is_err()
                     {

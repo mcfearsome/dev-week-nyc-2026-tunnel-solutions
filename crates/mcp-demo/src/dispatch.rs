@@ -32,13 +32,25 @@ fn text_content(text: &str) -> Value {
 pub async fn call_tool(name: &str, args: &Value) -> Result<Value, String> {
     match name {
         "read" => {
-            let path = args.get("path").and_then(|v| v.as_str()).ok_or("missing 'path'")?;
-            let body = tokio::fs::read_to_string(path).await.map_err(|e| format!("read failed: {e}"))?;
+            let path = args
+                .get("path")
+                .and_then(|v| v.as_str())
+                .ok_or("missing 'path'")?;
+            let body = tokio::fs::read_to_string(path)
+                .await
+                .map_err(|e| format!("read failed: {e}"))?;
             Ok(text_content(&body))
         }
         "shell" => {
-            let cmd = args.get("cmd").and_then(|v| v.as_str()).ok_or("missing 'cmd'")?;
-            let out = tokio::process::Command::new("sh").arg("-c").arg(cmd).output().await
+            let cmd = args
+                .get("cmd")
+                .and_then(|v| v.as_str())
+                .ok_or("missing 'cmd'")?;
+            let out = tokio::process::Command::new("sh")
+                .arg("-c")
+                .arg(cmd)
+                .output()
+                .await
                 .map_err(|e| format!("spawn failed: {e}"))?;
             let mut s = String::from_utf8_lossy(&out.stdout).into_owned();
             if !out.stderr.is_empty() {
@@ -87,27 +99,39 @@ mod tests {
     #[test]
     fn tool_list_has_read_then_shell() {
         let tl = tool_list();
-        let names: Vec<&str> = tl["tools"].as_array().unwrap().iter()
-            .map(|t| t["name"].as_str().unwrap()).collect();
+        let names: Vec<&str> = tl["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["name"].as_str().unwrap())
+            .collect();
         assert_eq!(names, vec!["read", "shell"]);
         assert_eq!(tl["tools"][0]["inputSchema"]["type"], "object");
     }
 
     #[tokio::test]
     async fn initialize_returns_server_info() {
-        let resp = handle(&json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}})).await.unwrap();
+        let resp = handle(&json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}))
+            .await
+            .unwrap();
         assert_eq!(resp["result"]["serverInfo"]["name"], "mcp-demo");
         assert_eq!(resp["id"], 1);
     }
 
     #[tokio::test]
     async fn initialized_notification_yields_no_response() {
-        assert!(handle(&json!({"jsonrpc":"2.0","method":"notifications/initialized"})).await.is_none());
+        assert!(
+            handle(&json!({"jsonrpc":"2.0","method":"notifications/initialized"}))
+                .await
+                .is_none()
+        );
     }
 
     #[tokio::test]
     async fn unknown_method_is_minus_32601() {
-        let resp = handle(&json!({"jsonrpc":"2.0","id":9,"method":"bogus"})).await.unwrap();
+        let resp = handle(&json!({"jsonrpc":"2.0","id":9,"method":"bogus"}))
+            .await
+            .unwrap();
         assert_eq!(resp["error"]["code"], -32601);
     }
 
@@ -121,7 +145,9 @@ mod tests {
     async fn read_returns_file_contents() {
         let p = std::env::temp_dir().join("mcp-demo-read-test.txt");
         tokio::fs::write(&p, "hello-file").await.unwrap();
-        let out = call_tool("read", &json!({"path": p.to_str().unwrap()})).await.unwrap();
+        let out = call_tool("read", &json!({"path": p.to_str().unwrap()}))
+            .await
+            .unwrap();
         assert_eq!(out["content"][0]["text"], "hello-file");
     }
 }

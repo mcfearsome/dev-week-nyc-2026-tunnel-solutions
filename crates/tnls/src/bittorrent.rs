@@ -30,7 +30,9 @@ pub fn build_magnet(info_hash_hex: &str, name: &str, trackers: &[String]) -> Str
 
 /// Create a torrent for `path` and assemble the magnet + torrent bytes for seeding.
 pub async fn create_share(path: &Path, trackers: &[String]) -> Result<ShareMeta> {
-    let size = std::fs::metadata(path).with_context(|| format!("stat {path:?}"))?.len();
+    let size = std::fs::metadata(path)
+        .with_context(|| format!("stat {path:?}"))?
+        .len();
     let name = path
         .file_name()
         .and_then(|s| s.to_str())
@@ -38,16 +40,23 @@ pub async fn create_share(path: &Path, trackers: &[String]) -> Result<ShareMeta>
         .to_string();
 
     let spawner = librqbit::spawn_utils::BlockingSpawner::new(1);
-    let result = librqbit::create_torrent(path, librqbit::CreateTorrentOptions::default(), &spawner)
-        .await
-        .context("create_torrent")?;
+    let result =
+        librqbit::create_torrent(path, librqbit::CreateTorrentOptions::default(), &spawner)
+            .await
+            .context("create_torrent")?;
 
     // Id20 has no Display; as_string() returns the 40-char lowercase hex.
     let info_hash_hex = result.info_hash().as_string();
     let torrent_bytes = result.as_bytes().context("serialize torrent")?;
     let magnet = build_magnet(&info_hash_hex, &name, trackers);
 
-    Ok(ShareMeta { info_hash_hex, name, size, magnet, torrent_bytes })
+    Ok(ShareMeta {
+        info_hash_hex,
+        name,
+        size,
+        magnet,
+        torrent_bytes,
+    })
 }
 
 /// Options that differ between real use (internet) and the hermetic test.
@@ -69,7 +78,11 @@ fn session_opts(n: &NetOpts) -> SessionOptions {
         ..ListenerOptions::default()
     });
     SessionOptions {
-        dht: if n.disable_dht { None } else { Some(librqbit::DhtSessionConfig::default()) },
+        dht: if n.disable_dht {
+            None
+        } else {
+            Some(librqbit::DhtSessionConfig::default())
+        },
         persistence: None,
         listen,
         ..Default::default()
@@ -100,7 +113,10 @@ pub async fn seed(meta: &ShareMeta, data_dir: &Path, net: NetOpts) -> Result<See
         .await
         .context("seed add_torrent")?;
     let handle = resp.into_handle().context("seed: no handle")?;
-    Ok(SeedHandle { _session: session, _handle: handle })
+    Ok(SeedHandle {
+        _session: session,
+        _handle: handle,
+    })
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -127,8 +143,16 @@ impl FetchHandle {
             downloaded: s.progress_bytes,
             total: s.total_bytes,
             finished: s.finished,
-            down_speed_bps: s.live.as_ref().map(|l| l.download_speed.mbps * 125_000.0).unwrap_or(0.0),
-            up_speed_bps: s.live.as_ref().map(|l| l.upload_speed.mbps * 125_000.0).unwrap_or(0.0),
+            down_speed_bps: s
+                .live
+                .as_ref()
+                .map(|l| l.download_speed.mbps * 125_000.0)
+                .unwrap_or(0.0),
+            up_speed_bps: s
+                .live
+                .as_ref()
+                .map(|l| l.upload_speed.mbps * 125_000.0)
+                .unwrap_or(0.0),
         }
     }
     pub async fn wait(&self) -> Result<()> {
@@ -158,10 +182,22 @@ pub async fn fetch(magnet: &str, out_dir: &Path, net: NetOpts) -> Result<FetchHa
         .await
         .context("fetch add_torrent")?;
     // `dn` from the magnet gives the display name for output_path().
-    let name = magnet.split("&dn=").nth(1).and_then(|s| s.split('&').next())
-        .map(|s| urlencoding::decode(s).map(|c| c.into_owned()).unwrap_or_else(|_| s.to_string()));
+    let name = magnet
+        .split("&dn=")
+        .nth(1)
+        .and_then(|s| s.split('&').next())
+        .map(|s| {
+            urlencoding::decode(s)
+                .map(|c| c.into_owned())
+                .unwrap_or_else(|_| s.to_string())
+        });
     let handle = resp.into_handle().context("fetch: no handle")?;
-    Ok(FetchHandle { _session: session, handle, out_dir: out_dir.to_path_buf(), name })
+    Ok(FetchHandle {
+        _session: session,
+        handle,
+        out_dir: out_dir.to_path_buf(),
+        name,
+    })
 }
 
 #[cfg(test)]
@@ -170,11 +206,20 @@ mod tests {
 
     #[test]
     fn magnet_has_infohash_name_and_tracker() {
-        let m = build_magnet("aabbccddeeff00112233445566778899aabbccdd", "my file.bin",
-            &["udp://tracker.example:1337/announce".to_string()]);
-        assert!(m.starts_with("magnet:?xt=urn:btih:aabbccddeeff00112233445566778899aabbccdd"), "{m}");
+        let m = build_magnet(
+            "aabbccddeeff00112233445566778899aabbccdd",
+            "my file.bin",
+            &["udp://tracker.example:1337/announce".to_string()],
+        );
+        assert!(
+            m.starts_with("magnet:?xt=urn:btih:aabbccddeeff00112233445566778899aabbccdd"),
+            "{m}"
+        );
         assert!(m.contains("&dn=my%20file.bin"), "{m}");
-        assert!(m.contains("&tr=udp%3A%2F%2Ftracker.example%3A1337%2Fannounce"), "{m}");
+        assert!(
+            m.contains("&tr=udp%3A%2F%2Ftracker.example%3A1337%2Fannounce"),
+            "{m}"
+        );
     }
 
     #[tokio::test]

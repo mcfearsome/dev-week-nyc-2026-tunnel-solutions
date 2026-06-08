@@ -1,14 +1,14 @@
 use anyhow::{anyhow, Result};
 use futures_util::{SinkExt, StreamExt};
-use tunnel_locker_core::{
-    decide_call, filter_tools, mint, verify, AgentFrame, CallDecision, Claims, ErrorCode,
-    TokenError, Tool, ViewerFrame,
-};
 use std::ops::ControlFlow;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{mpsc, Notify};
 use tokio_tungstenite::tungstenite::Message;
+use tunnel_locker_core::{
+    decide_call, filter_tools, mint, verify, AgentFrame, CallDecision, Claims, ErrorCode,
+    TokenError, Tool, ViewerFrame,
+};
 
 use crate::mcp::McpChild;
 use crate::pidfile;
@@ -22,7 +22,10 @@ pub struct OpenArgs {
 }
 
 fn now_secs() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
 }
 
 fn random_id() -> String {
@@ -32,17 +35,30 @@ fn random_id() -> String {
 }
 
 fn relay_host(relay: &str) -> String {
-    relay.trim_start_matches("ws://").trim_start_matches("wss://").trim_end_matches('/').to_string()
+    relay
+        .trim_start_matches("ws://")
+        .trim_start_matches("wss://")
+        .trim_end_matches('/')
+        .to_string()
 }
 
 /// The viewer link's scheme tracks the relay transport: a `wss://` relay sits behind TLS, so
 /// the link is `https://`; a plain `ws://` relay (local dev) yields `http://`.
 fn link_scheme(relay: &str) -> &'static str {
-    if relay.trim_start().starts_with("wss://") { "https" } else { "http" }
+    if relay.trim_start().starts_with("wss://") {
+        "https"
+    } else {
+        "http"
+    }
 }
 
 fn err_frame(id: Option<u64>, code: ErrorCode, tool: Option<String>, msg: &str) -> AgentFrame {
-    AgentFrame::Error { id, code, tool, message: Some(msg.to_string()) }
+    AgentFrame::Error {
+        id,
+        code,
+        tool,
+        message: Some(msg.to_string()),
+    }
 }
 
 pub async fn open(args: OpenArgs) -> Result<()> {
@@ -55,17 +71,28 @@ pub async fn open(args: OpenArgs) -> Result<()> {
     let mut secret = [0u8; 32];
     getrandom::getrandom(&mut secret).map_err(|e| anyhow!("rng: {e}"))?;
     let exp = now_secs() + args.ttl.as_secs();
-    let token = mint(&secret, &Claims { tunnel_id: tunnel_id.clone(), scope: args.scope.clone(), exp });
+    let token = mint(
+        &secret,
+        &Claims {
+            tunnel_id: tunnel_id.clone(),
+            scope: args.scope.clone(),
+            exp,
+        },
+    );
 
     // 3. Dial the relay (agent role).
     let host = relay_host(&args.relay);
     let agent_url = format!("{}/agent/{tunnel_id}", args.relay.trim_end_matches('/'));
-    let (ws, _) = tokio_tungstenite::connect_async(&agent_url).await
+    let (ws, _) = tokio_tungstenite::connect_async(&agent_url)
+        .await
         .map_err(|e| anyhow!("connecting to relay {agent_url}: {e}"))?;
     let (mut sink, mut stream) = ws.split();
 
     // 4. Pidfile + banner.
-    let link = format!("{}://{host}/t/{tunnel_id}#{token}", link_scheme(&args.relay));
+    let link = format!(
+        "{}://{host}/t/{tunnel_id}#{token}",
+        link_scheme(&args.relay)
+    );
     pidfile::write(&tunnel_id, &link)?;
     print_banner(&args, &child_tools, &host, &tunnel_id, &token);
 
@@ -73,7 +100,11 @@ pub async fn open(args: OpenArgs) -> Result<()> {
     let (out_tx, mut out_rx) = mpsc::unbounded_channel::<AgentFrame>();
     let writer = tokio::spawn(async move {
         while let Some(frame) = out_rx.recv().await {
-            if sink.send(Message::Text(serde_json::to_string(&frame).unwrap())).await.is_err() {
+            if sink
+                .send(Message::Text(serde_json::to_string(&frame).unwrap()))
+                .await
+                .is_err()
+            {
                 break;
             }
         }
@@ -145,6 +176,9 @@ pub async fn open(args: OpenArgs) -> Result<()> {
 
 /// Handle one viewer frame. Returns `Break` when the session must close
 /// (an invalid or expired `Hello`, per spec §7.3); `Continue` otherwise.
+// The 8 params are the per-session working set threaded through one place;
+// bundling them into a struct would relocate the fields without adding clarity.
+#[allow(clippy::too_many_arguments)]
 async fn handle_frame(
     frame: ViewerFrame,
     secret: &[u8],
@@ -159,8 +193,13 @@ async fn handle_frame(
         ViewerFrame::Hello { token } => match verify(secret, &token, now_secs()) {
             Ok(c) => {
                 let expires_in_ms = exp.saturating_sub(now_secs()) * 1000;
-                let _ = out_tx.send(AgentFrame::Ready { scope: c.scope.clone(), expires_in_ms });
-                let _ = out_tx.send(AgentFrame::Tools { tools: filter_tools(child_tools, &c.scope) });
+                let _ = out_tx.send(AgentFrame::Ready {
+                    scope: c.scope.clone(),
+                    expires_in_ms,
+                });
+                let _ = out_tx.send(AgentFrame::Tools {
+                    tools: filter_tools(child_tools, &c.scope),
+                });
                 *verified = Some(c);
             }
             Err(TokenError::Expired) => {
@@ -168,24 +207,53 @@ async fn handle_frame(
                 return ControlFlow::Break(());
             }
             Err(_) => {
-                let _ = out_tx.send(err_frame(None, ErrorCode::Unauthorized, None, "invalid token"));
+                let _ = out_tx.send(err_frame(
+                    None,
+                    ErrorCode::Unauthorized,
+                    None,
+                    "invalid token",
+                ));
                 return ControlFlow::Break(());
             }
         },
         ViewerFrame::List => match verified {
-            Some(c) => { let _ = out_tx.send(AgentFrame::Tools { tools: filter_tools(child_tools, &c.scope) }); }
-            None => { let _ = out_tx.send(err_frame(None, ErrorCode::Unauthorized, None, "say hello first")); }
+            Some(c) => {
+                let _ = out_tx.send(AgentFrame::Tools {
+                    tools: filter_tools(child_tools, &c.scope),
+                });
+            }
+            None => {
+                let _ = out_tx.send(err_frame(
+                    None,
+                    ErrorCode::Unauthorized,
+                    None,
+                    "say hello first",
+                ));
+            }
         },
         ViewerFrame::Call { id, tool, args } => {
             let Some(c) = verified.clone() else {
-                let _ = out_tx.send(err_frame(Some(id), ErrorCode::Unauthorized, None, "say hello first"));
+                let _ = out_tx.send(err_frame(
+                    Some(id),
+                    ErrorCode::Unauthorized,
+                    None,
+                    "say hello first",
+                ));
                 return ControlFlow::Continue(());
             };
             match decide_call(&c, now_secs(), &tool) {
-                CallDecision::Expired => { let _ = out_tx.send(err_frame(Some(id), ErrorCode::Expired, None, "ttl expired")); }
+                CallDecision::Expired => {
+                    let _ =
+                        out_tx.send(err_frame(Some(id), ErrorCode::Expired, None, "ttl expired"));
+                }
                 CallDecision::OutOfScope => {
                     counts.blocks += 1;
-                    let _ = out_tx.send(err_frame(Some(id), ErrorCode::OutOfScope, Some(tool), "tool not in scope"));
+                    let _ = out_tx.send(err_frame(
+                        Some(id),
+                        ErrorCode::OutOfScope,
+                        Some(tool),
+                        "tool not in scope",
+                    ));
                 }
                 CallDecision::Forward => {
                     counts.calls += 1;
@@ -194,7 +262,14 @@ async fn handle_frame(
                             let content = result.get("content").cloned().unwrap_or(result);
                             let _ = out_tx.send(AgentFrame::Result { id, content });
                         }
-                        Err(e) => { let _ = out_tx.send(err_frame(Some(id), ErrorCode::ToolError, Some(tool), &e.to_string())); }
+                        Err(e) => {
+                            let _ = out_tx.send(err_frame(
+                                Some(id),
+                                ErrorCode::ToolError,
+                                Some(tool),
+                                &e.to_string(),
+                            ));
+                        }
                     }
                 }
             }
@@ -237,9 +312,16 @@ pub fn close(tunnel_id: Option<&str>) -> Result<()> {
 }
 
 fn print_banner(args: &OpenArgs, child_tools: &[Tool], host: &str, id: &str, token: &str) {
-    let in_scope = child_tools.iter().filter(|t| args.scope.iter().any(|s| s == &t.name)).count();
+    let in_scope = child_tools
+        .iter()
+        .filter(|t| args.scope.iter().any(|s| s == &t.name))
+        .count();
     let total = child_tools.len();
-    let scope_str = if args.scope.is_empty() { "(none — deny all)".into() } else { args.scope.join(",") };
+    let scope_str = if args.scope.is_empty() {
+        "(none — deny all)".into()
+    } else {
+        args.scope.join(",")
+    };
     println!();
     println!("  tunnel.solutions");
     println!("  ─────────────────");
@@ -249,7 +331,10 @@ fn print_banner(args: &OpenArgs, child_tools: &[Tool], host: &str, id: &str, tok
     println!("  ttl        {}", humantime::format_duration(args.ttl));
     println!("  token      ✓   minted");
     println!("  relay      {}  connected", args.relay);
-    println!("  link  →    {}://{host}/t/{id}#{token}", link_scheme(&args.relay));
+    println!(
+        "  link  →    {}://{host}/t/{id}#{token}",
+        link_scheme(&args.relay)
+    );
     println!();
     println!("  serving — ctrl-c or `tunnel close` to revoke");
     println!();
