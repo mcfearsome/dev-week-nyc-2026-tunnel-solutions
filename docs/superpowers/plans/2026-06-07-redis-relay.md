@@ -218,14 +218,20 @@ pub struct AppState { pub backplane: Arc<dyn Backplane>, pub stats: Arc<Stats> }
 pub fn build_app() -> Router { build_app_with(Arc::new(LocalBackplane::new(max_tunnels()))) }
 
 pub fn build_app_with(backplane: Arc<dyn Backplane>) -> Router {
-    // …existing stats setup (salt, flush task)… then:
+    // MOVE the ENTIRE existing stats setup from build_app into here (do not leave it behind,
+    // or build_app_with — used by Redis + the cross-instance test — gets no stats):
+    //   let mut salt = [0u8; 8]; let _ = getrandom::getrandom(&mut salt);
+    //   let stats = Arc::new(Stats::new(std::env::var("STATS_PATH").ok().map(PathBuf::from),
+    //                                   u64::from_le_bytes(salt)));
+    //   { let stats = stats.clone(); tokio::spawn(async move { loop {
+    //       tokio::time::sleep(Duration::from_secs(10)).await; stats.flush(); } }); }
     let state = AppState { backplane, stats };
-    Router::new() /* …routes unchanged… */ .with_state(state)
+    Router::new() /* …ALL existing routes unchanged… */ .with_state(state)
 }
 ```
 Change `agent_ws`/`viewer_ws` to call `run_side(s.backplane.clone(), s.stats, id, Role::Agent|Viewer, socket)`.
 
-- [ ] **Step 3:** `cargo test -p relay` → the existing `tests/pairing.rs` (single instance) still passes (it uses `build_app()` = Local). Build `relay` + `agent` (agent's e2e dev-dep on relay). Commit: `refactor(relay): run_side routes pairing through Backplane`.
+- [ ] **Step 3:** `cargo test -p relay` → the existing `tests/pairing.rs` (single instance) still passes (it uses `build_app()` = Local). Then confirm **all** `relay::build_app()` callers still compile: `cargo build --workspace --tests` (agent, tnls, **and** tunnel-locker tests each call `build_app()`). Commit: `refactor(relay): run_side routes pairing through Backplane`.
 
 ### Task 3: Cross-instance pairing test (hermetic, shared Local)
 
