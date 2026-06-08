@@ -64,11 +64,13 @@ pub fn build_app_with(backplane: Arc<dyn Backplane>) -> Router {
         .with_state(state)
 }
 
-/// Real client IP from Fly's proxy header (falls back to XFF, then "unknown"). Used only to
-/// compute a salted one-way hash for unique-visitor dedupe — never stored.
+/// Real client IP for the salted-hash visitor dedupe (never stored). Behind Cloudflare's proxy
+/// Fly sees CF's edge IP, so prefer `cf-connecting-ip` (the real visitor); fall back to Fly's
+/// header (direct), then XFF, then "unknown".
 fn client_ip(headers: &HeaderMap) -> String {
     headers
-        .get("fly-client-ip")
+        .get("cf-connecting-ip")
+        .or_else(|| headers.get("fly-client-ip"))
         .or_else(|| headers.get("x-forwarded-for"))
         .and_then(|v| v.to_str().ok())
         .map(|s| s.split(',').next().unwrap_or(s).trim().to_string())
