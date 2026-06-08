@@ -99,13 +99,21 @@ async fn viewer_page(State(s): State<AppState>) -> impl IntoResponse {
 
 const MAX_WS_MESSAGE: usize = 1 << 20; // 1 MiB — guard against a frame-bomb OOM.
 
-async fn agent_ws(Path(id): Path<String>, State(s): State<AppState>, ws: WebSocketUpgrade) -> impl IntoResponse {
+async fn agent_ws(
+    Path(id): Path<String>,
+    State(s): State<AppState>,
+    ws: WebSocketUpgrade,
+) -> impl IntoResponse {
     ws.max_message_size(MAX_WS_MESSAGE)
         .max_frame_size(MAX_WS_MESSAGE)
         .on_upgrade(move |socket| run_side(s.registry, s.stats, id, Role::Agent, socket))
 }
 
-async fn viewer_ws(Path(id): Path<String>, State(s): State<AppState>, ws: WebSocketUpgrade) -> impl IntoResponse {
+async fn viewer_ws(
+    Path(id): Path<String>,
+    State(s): State<AppState>,
+    ws: WebSocketUpgrade,
+) -> impl IntoResponse {
     ws.max_message_size(MAX_WS_MESSAGE)
         .max_frame_size(MAX_WS_MESSAGE)
         .on_upgrade(move |socket| run_side(s.registry, s.stats, id, Role::Viewer, socket))

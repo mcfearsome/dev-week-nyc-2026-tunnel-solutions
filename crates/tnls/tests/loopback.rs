@@ -18,15 +18,33 @@ async fn seed_then_fetch_moves_bytes_over_loopback() {
     // seed: DHT off, fixed loopback port
     let port = 47_111u16;
     let meta = create_share(&src, &[]).await.unwrap();
-    let _seeder = seed(&meta, &seed_dir, NetOpts {
-        disable_dht: true, listen_port: Some(port), enable_upnp: false, initial_peers: vec![],
-    }).await.unwrap();
+    let _seeder = seed(
+        &meta,
+        &seed_dir,
+        NetOpts {
+            disable_dht: true,
+            listen_port: Some(port),
+            enable_upnp: false,
+            initial_peers: vec![],
+        },
+    )
+    .await
+    .unwrap();
 
     // fetch: DHT off, connect straight to the seeder via initial_peers (metadata flows over BEP-9)
     let peer = format!("127.0.0.1:{port}").parse().unwrap();
-    let dl = fetch(&meta.magnet, &fetch_dir, NetOpts {
-        disable_dht: true, listen_port: None, enable_upnp: false, initial_peers: vec![peer],
-    }).await.unwrap();
+    let dl = fetch(
+        &meta.magnet,
+        &fetch_dir,
+        NetOpts {
+            disable_dht: true,
+            listen_port: None,
+            enable_upnp: false,
+            initial_peers: vec![peer],
+        },
+    )
+    .await
+    .unwrap();
 
     // wait (bounded) for completion
     tokio::time::timeout(Duration::from_secs(30), dl.wait())

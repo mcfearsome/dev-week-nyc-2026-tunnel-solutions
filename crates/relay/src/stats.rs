@@ -59,7 +59,10 @@ impl Stats {
             .and_then(|p| std::fs::read_to_string(p).ok())
             .and_then(|s| serde_json::from_str::<Inner>(&s).ok())
             .unwrap_or_else(|| Inner::fresh(salt));
-        Stats { inner: Mutex::new(inner), path }
+        Stats {
+            inner: Mutex::new(inner),
+            path,
+        }
     }
 
     pub fn page_view(&self, client_ip: &str) {
@@ -150,7 +153,10 @@ mod tests {
         s.page_view("203.0.113.99");
         let g = s.inner.lock().unwrap();
         let json = serde_json::to_string(&*g).unwrap();
-        assert!(!json.contains("203.0.113.99"), "raw IP leaked into persistence: {json}");
+        assert!(
+            !json.contains("203.0.113.99"),
+            "raw IP leaked into persistence: {json}"
+        );
     }
 
     #[test]

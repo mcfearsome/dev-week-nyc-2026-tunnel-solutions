@@ -33,8 +33,14 @@ impl McpChild {
             .spawn()
             .with_context(|| format!("spawning MCP server '{cmd}'"))?;
 
-        let stdin = child.stdin.take().ok_or_else(|| anyhow!("child has no stdin"))?;
-        let stdout = child.stdout.take().ok_or_else(|| anyhow!("child has no stdout"))?;
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| anyhow!("child has no stdin"))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| anyhow!("child has no stdout"))?;
         let pending: Pending = Arc::new(Mutex::new(HashMap::new()));
 
         // Background reader: dispatch responses to waiters by id.
@@ -46,7 +52,9 @@ impl McpChild {
                     if line.trim().is_empty() {
                         continue;
                     }
-                    let Ok(msg) = serde_json::from_str::<Value>(&line) else { continue };
+                    let Ok(msg) = serde_json::from_str::<Value>(&line) else {
+                        continue;
+                    };
                     if let Some(id) = msg.get("id").and_then(|v| v.as_u64()) {
                         if let Some(tx) = pending.lock().await.remove(&id) {
                             let _ = tx.send(msg);
@@ -57,16 +65,30 @@ impl McpChild {
             });
         }
 
-        let mut me = McpChild { child, stdin, pending, next_id: AtomicU64::new(1), tools: vec![] };
+        let mut me = McpChild {
+            child,
+            stdin,
+            pending,
+            next_id: AtomicU64::new(1),
+            tools: vec![],
+        };
 
-        me.request("initialize", json!({
-            "protocolVersion": "2024-11-05",
-            "capabilities": {},
-            "clientInfo": { "name": "tunnel", "version": "0.1.0" }
-        })).await.context("MCP initialize")?;
+        me.request(
+            "initialize",
+            json!({
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": { "name": "tunnel", "version": "0.1.0" }
+            }),
+        )
+        .await
+        .context("MCP initialize")?;
         me.notify("notifications/initialized", json!({})).await?;
 
-        let list = me.request("tools/list", json!({})).await.context("MCP tools/list")?;
+        let list = me
+            .request("tools/list", json!({}))
+            .await
+            .context("MCP tools/list")?;
         me.tools = serde_json::from_value(list.get("tools").cloned().unwrap_or(json!([])))
             .context("parsing tools/list")?;
         Ok(me)
@@ -82,11 +104,15 @@ impl McpChild {
         let (tx, rx) = oneshot::channel();
         self.pending.lock().await.insert(id, tx);
 
-        let line = format!("{}\n", json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params }));
+        let line = format!(
+            "{}\n",
+            json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params })
+        );
         self.stdin.write_all(line.as_bytes()).await?;
         self.stdin.flush().await?;
 
-        let resp = tokio::time::timeout(Duration::from_secs(10), rx).await
+        let resp = tokio::time::timeout(Duration::from_secs(10), rx)
+            .await
             .map_err(|_| anyhow!("MCP request '{method}' timed out"))?
             .map_err(|_| anyhow!("MCP reader dropped before responding"))?;
         if let Some(e) = resp.get("error") {
@@ -96,7 +122,10 @@ impl McpChild {
     }
 
     async fn notify(&mut self, method: &str, params: Value) -> Result<()> {
-        let line = format!("{}\n", json!({ "jsonrpc": "2.0", "method": method, "params": params }));
+        let line = format!(
+            "{}\n",
+            json!({ "jsonrpc": "2.0", "method": method, "params": params })
+        );
         self.stdin.write_all(line.as_bytes()).await?;
         self.stdin.flush().await?;
         Ok(())
@@ -104,7 +133,8 @@ impl McpChild {
 
     /// Invoke a tool; returns the MCP tool `result` object (`{ content: [...] }`).
     pub async fn call_tool(&mut self, name: &str, args: Value) -> Result<Value> {
-        self.request("tools/call", json!({ "name": name, "arguments": args })).await
+        self.request("tools/call", json!({ "name": name, "arguments": args }))
+            .await
     }
 
     pub async fn kill(&mut self) {
