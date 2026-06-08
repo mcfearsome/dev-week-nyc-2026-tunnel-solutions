@@ -69,7 +69,7 @@
 ### Beat 5 — Close (2:15–2:30)
 - **Visual:** the landing hero again, URL `tunnel.locker` + the GitHub repo on screen.
 - **VO:** "tunnel.solutions — a pluggable host for capability-scoped, ephemeral MCP tunnels. Live at tunnel dot locker. Built in Rust."
-- **End card:** `tunnel.locker` · `github.com/mcfearsome/tunnel-solutions`
+- **End card:** `tunnel.locker` · `github.com/mcfearsome/dev-week-nyc-2026-tunnel-solutions`
 
 ---
 
