@@ -27,39 +27,67 @@ env. This makes the change additive and testable rather than a core rewrite. The
 "dumb" (it still never parses our protocol, holds no secret); only *where the pairing state
 lives* changes.
 
-## 3. Backplane interface (semantics; exact signatures pinned in the plan)
+## 3. Backplane interface
+
+The trait boundary uses **serialized frames** (`bytes::Bytes`), not Axum's `ws::Message` (which
+can't cross Redis). `run_side` converts an inbound `Message::Text`/`Binary` → `Bytes` before
+`forward`, and converts a delivered `Bytes` back into `Message::Text` for its own socket.
 
 ```
-register(tunnel_id, role, local_tx) -> Result<(), Occupied>
-    Record that `role` for `tunnel_id` is served here; `local_tx` delivers frames TO this
-    side's socket. Returns Occupied if the role is already taken for this tunnel (globally).
-forward(tunnel_id, from_role, msg)
-    Deliver `msg` to the PEER role — local fast-path if the peer is on this instance, else
-    hand it to the peer wherever it is.
+type Tx = mpsc::UnboundedSender<Delivery>;          // delivers TO a local socket
+enum Delivery { Frame(Bytes), Close }               // Close = peer gone → this side shuts down
+
+register(tunnel_id, role, local_tx: Tx) -> Result<(), Occupied>
+    Claim `role` for `tunnel_id` GLOBALLY. `local_tx` is how the backplane hands frames (and
+    the Close signal) to THIS side's socket. `Occupied` iff the role is currently held
+    anywhere; a role whose presence has expired/cleared counts as free.
+forward(tunnel_id, from_role, frame: Bytes)
+    Deliver to the PEER role — local fast-path if the peer's `local_tx` is on this instance,
+    else route to wherever the peer is. No peer present yet → drop (single agent/viewer).
 deregister(tunnel_id, role)
-    Drop this side and signal the peer to close (cascade teardown).
+    Release this side and push `Delivery::Close` to the peer's `local_tx` (cascade teardown).
 ```
 
-`run_side` (in `pairing.rs`) is rewritten to: `register` (reject on `Occupied`), spawn the
-writer pump draining `local_rx → socket` (unchanged), reader loop → `forward(...)` per inbound
-frame, and `deregister` on exit. The viewer↔agent **frame contents are untouched**.
+`run_side` (in `pairing.rs`) becomes: `register` (reject on `Occupied`); a **writer pump**
+draining `local_rx` — `Frame(b)` → `sink.send(Message::Text(b))`, `Close` → close the sink and
+exit; a **reader loop** converting each inbound socket message to `Bytes` and calling
+`forward`; `deregister` on exit. The viewer↔agent **frame contents are untouched** — only the
+transport wrapper changes.
+
+**Lifecycle:** `register`/`deregister` are per-role. The tunnel's shared entry is cleaned up
+once both roles are gone. Re-registering a role whose peer is still present is allowed (the new
+side pairs with the survivor); a role whose own presence is still live returns `Occupied`. This
+generalizes today's all-or-nothing `map.remove` to per-role across instances.
 
 ## 4. RedisBackplane mechanics
 
-Per tunnel, per direction pub/sub channels and presence keys:
+**Connection model:** each instance holds (a) a pooled command connection for
+`SET`/`DEL`/`PUBLISH`, and (b) **one shared subscriber task** on its own dedicated connection
+(`SUBSCRIBE` monopolizes a connection, so it can't share the command pool). The subscriber owns
+a `HashMap<channel, Tx>` dispatch table: on each Pub/Sub message it looks up the channel and
+hands the payload to the matching `local_tx`. This is one subscriber per instance multiplexing
+all of that instance's tunnels — not a connection per tunnel.
 
-- **Register:** `SET tunnel:<id>:<role> = <instance_id> NX EX <ttl>` — `NX` gives **global
-  duplicate-role rejection**; `EX`+a heartbeat task give **crash cleanup** (a dead instance's
-  presence expires). Subscribe to `tunnel:<id>:to_<role>`; on a published frame, send it to
-  `local_tx` (→ the socket).
-- **Forward:** if the peer's `local_tx` is in this instance's local map → send directly (**same-
-  instance fast path**, no Redis hop). Else `PUBLISH tunnel:<id>:to_<peer_role>` the frame.
-- **Deregister:** `DEL tunnel:<id>:<role>`, `PUBLISH tunnel:<id>:to_<peer_role>` a close
-  sentinel (→ peer closes), `UNSUBSCRIBE`.
+Per tunnel, per direction channels (`tunnel:<id>:to_agent` / `to_viewer`) + presence keys:
 
-Only small control-plane JSON frames cross Redis; bulk file data never touches the relay.
-Cross-instance latency is one Redis hop per frame (acceptable for the control plane);
-same-instance traffic skips Redis entirely.
+- **Register:** `SET tunnel:<id>:<role> = <instance_id> NX EX <ttl>` — `NX` = **global
+  duplicate-role rejection**; `EX` + a heartbeat refreshing the key = **crash cleanup** (a
+  dead instance's presence expires, freeing the role). Then insert `tunnel:<id>:to_<role> →
+  local_tx` into the dispatch table and `SUBSCRIBE tunnel:<id>:to_<role>`.
+- **Forward(frame):** peer `local_tx` in the local map → deliver `Delivery::Frame(bytes)`
+  directly (**same-instance fast path**, no Redis). Else `PUBLISH tunnel:<id>:to_<peer_role>` a
+  *frame*-tagged message.
+- **Deregister:** `DEL tunnel:<id>:<role>`; deliver `Delivery::Close` to the peer — locally if
+  present, else `PUBLISH tunnel:<id>:to_<peer_role>` a *close*-tagged message; remove the
+  dispatch entry and `UNSUBSCRIBE`.
+
+**Wire tag:** published payloads carry a tag distinguishing `frame` from `close` (e.g. a JSON
+envelope `{"k":"f","b":"<frame text>"}` / `{"k":"c"}`). The subscriber maps `frame → Frame`,
+`close → Close` onto the local `Tx`, so cross-instance teardown reproduces the local cascade
+exactly (peer's writer pump receives `Close` → closes its socket).
+
+Only small control-plane frames cross Redis; bulk file data never touches the relay. Cross-
+instance latency is one Redis hop per frame; same-instance traffic skips Redis entirely.
 
 ## 5. Infra
 

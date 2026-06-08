@@ -49,13 +49,18 @@ UPnP: `seed` already enables `enable_upnp_port_forwarding`; this maps `P`. We ad
 
 ## 4. Control-plane changes
 
-- **`tnls mcp-serve`** gains a repeatable `--peer <addr>` flag. `request_file` returns content
-  text = a JSON object `{ "magnet": "…", "peers": ["ip:port", …] }` (instead of the bare
-  magnet string). `list_shares`/`status` unchanged.
-- **`tnls get`** (`retrieve_magnet`) parses the JSON content → `(magnet, Vec<SocketAddr>)`;
-  invalid/unparseable peer strings are skipped. `run_get` passes the peers as
-  `NetOpts.initial_peers` to `fetch`. Backward-compatible parse: if the content is a bare
-  magnet string (no JSON), treat `peers` as empty.
+- **`tnls mcp-serve`** gains a repeatable `--peer <addr>` flag; the existing `ShareInfo` struct
+  gains a `peers: Vec<String>` field populated from it (alongside `magnet`, `name`, `size`).
+  `request_file` returns content text = a JSON object `{ "magnet": "…", "peers": ["ip:port", …] }`
+  (instead of the bare magnet string). `list_shares` and `status` are unaffected by the new
+  field — their response shapes don't change.
+- **`tnls get`** (`retrieve_magnet`) returns a new struct `RetrievedFile { magnet: String,
+  peers: Vec<SocketAddr>, name: Option<String> }`, **replacing** the current
+  `(magnet, Option<name>)` return. It reads the `request_file` content's `text`, parses it as
+  the JSON `{ magnet, peers }` (skipping unparseable peer strings), and still derives `name`
+  from the magnet's `&dn=`. **Backward-compatible parse:** if the `text` is a bare `magnet:`
+  string rather than JSON, treat it as `{ magnet, peers: [] }`. `run_get` passes
+  `RetrievedFile.peers` as `NetOpts.initial_peers` to `fetch`.
 
 ## 5. Relay change
 
@@ -72,9 +77,11 @@ silently in librqbit; DHT/tracker remain as the fallback.
 
 ## 7. New gate / testing
 
-- The **Phase 2 e2e test upgrades**: with the seeder advertising `127.0.0.1:P`, a single-host
-  `share`→`get` now **completes the transfer**. The test asserts the downloaded bytes equal
-  the source (not just "magnet retrieved"), still hermetic (loopback peer, no network).
+- The **Phase 2 e2e test upgrades** (`crates/tnls/tests/end_to_end.rs`, currently
+  `get_retrieves_the_magnet_through_the_tunnel`): with the seeder advertising `127.0.0.1:P`, a
+  single-host `share`→`get` now **completes the transfer**. The test (renamed accordingly)
+  asserts the downloaded bytes equal the source — not just "magnet retrieved" — still hermetic
+  (loopback peer, no network/DHT).
 - `mcp_serve` dispatch unit test: `request_file` returns JSON with `magnet` + `peers`.
 - `get` unit test: parse a `{magnet, peers}` content → `(String, Vec<SocketAddr>)`, and the
   bare-magnet fallback.
