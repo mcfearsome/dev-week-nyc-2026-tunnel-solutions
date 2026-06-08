@@ -1,4 +1,3 @@
-pub mod bittorrent;
-pub mod get;
-pub mod mcp_serve;
-pub mod share;
+pub mod cli;
+pub mod discover;
+pub mod dispatch;

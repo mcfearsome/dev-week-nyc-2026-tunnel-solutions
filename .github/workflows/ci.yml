@@ -50,7 +50,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       # The integration tests self-bootstrap: they shell out to `cargo build -p <pkg>`
-      # before spawning target/debug/{relay,tnls,mcp-demo}, so no pre-build step is needed.
+      # before spawning target/debug/{relay,tnls,tnls-demo,tnls-rendezvous}, so no pre-build step is needed.
       - run: cargo test --workspace --locked
 
   audit:

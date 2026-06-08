@@ -1,13 +1,14 @@
 use anyhow::{anyhow, bail, Context, Result};
 use futures_util::{SinkExt, StreamExt};
 use std::net::SocketAddr;
+use tnls_core::{AgentFrame, ViewerFrame};
 use tokio_tungstenite::tungstenite::Message;
-use tunnel_locker_core::{AgentFrame, ViewerFrame};
 
 #[derive(Debug)]
 pub struct RetrievedFile {
     pub magnet: String,
     pub peers: Vec<SocketAddr>,
+    #[allow(dead_code)] // available for future consumers (e.g. display the filename)
     pub name: Option<String>,
 }
 
@@ -141,24 +142,24 @@ pub async fn run_get(link: &str, out_dir: &std::path::Path) -> Result<()> {
     let rf = retrieve_magnet(link).await?;
     println!("magnet acquired — downloading…");
     std::fs::create_dir_all(out_dir)?;
+    // Test hook: hermetic fetch (no DHT/UPnP) when TNLS_DISABLE_DHT is set, so the e2e
+    // downloads straight from the advertised loopback peer and the process exits promptly
+    // (no lingering DHT/UPnP tasks). Production default (env absent) keeps DHT + UPnP on.
+    let hermetic = std::env::var_os("TNLS_DISABLE_DHT").is_some_and(|v| !v.is_empty());
     let dl = crate::bittorrent::fetch(
         &rf.magnet,
         out_dir,
         crate::bittorrent::NetOpts {
-            disable_dht: false,
+            disable_dht: hermetic,
             listen_port: None,
-            enable_upnp: true,
+            enable_upnp: !hermetic,
             initial_peers: rf.peers,
         },
     )
     .await?;
     loop {
         let p = dl.progress();
-        let pct = if p.total > 0 {
-            p.downloaded * 100 / p.total
-        } else {
-            0
-        };
+        let pct = (p.downloaded * 100).checked_div(p.total).unwrap_or(0);
         println!("  {pct:>3}%  {}/{} bytes", p.downloaded, p.total);
         if p.finished {
             break;

@@ -4,12 +4,13 @@ A **capability-scoped, ephemeral tunnel that understands the protocol it carries
 opens a disposable link to your locally-running agent, sees only what you allow, and the link
 evaporates on TTL or close.
 
-Two products on one primitive:
+One pluggable host (`tnls`) + plugins — two use-cases on one primitive:
 
 | Binary | Crate | What it is |
 |--------|-------|-----------|
-| `tunnel` | `tunnel-locker` | A scoped tunnel to your local **MCP server** — filters `tools/list`, refuses out-of-scope `tools/call` agent-side, enforces a TTL on every call. |
-| `tnls` | `tnls` | **Capability-scoped file sending over BitTorrent**, built *on top of* the tunnel: seed a file, hand out the magnet through a scoped link, bytes move peer-to-peer. |
+| `tnls` | `tnls` | Host: `open`/`close`/`plugins` + plugin dispatch via `describe`. |
+| `tnls-demo` | `tnls-demo` (`plugins/demo`) | Sample rmcp MCP server plugin exposing `read` + `shell` — scoped tunnel to your local MCP server. |
+| `tnls-rendezvous` | `tnls-rendezvous` (`plugins/rendezvous`) | **Capability-scoped file sending over BitTorrent**: seed a file, hand out the magnet through a scoped link, bytes move peer-to-peer. |
 
 **Live relay + landing page: https://tunnel.locker**
 
@@ -25,12 +26,12 @@ real rather than cosmetic.
 ## Architecture
 
 ```
-viewer ──ws──> relay <──ws── agent ──stdio──> local MCP server
- (browser /     (pairs by    (holds the secret;   (real MCP JSON-RPC:
-  tnls get)      tunnel_id;    enforces scope        mcp-demo, or the hidden
-                 opaque bytes) + TTL, filters)       `tnls mcp-serve`)
+viewer ──ws──> relay <──ws── agent ──stdio──> tnls-<name> plugin
+ (browser /     (pairs by    (holds the secret;   (rmcp server over stdio:
+  tnls-rendezvous) tunnel_id;  enforces scope        tnls-demo, or
+                 opaque bytes) + TTL, filters)       tnls-rendezvous share)
 
-                            ⇣ for tnls, the file bytes never touch the relay ⇣
+                            ⇣ for tnls-rendezvous, the file bytes never touch the relay ⇣
         teammate  ◄════════════ BitTorrent swarm (data plane) ════════════►  you
 ```
 
@@ -39,7 +40,7 @@ and shuttles **opaque** frames, never holding the signing secret. All enforcemen
 **agent** — the only component holding the secret and sitting between the viewer and the real
 MCP server. A compromised relay cannot widen scope or extend a TTL; it only moves bytes.
 
-For **tnls**, that split becomes literal: the tunnel is the *control plane* (it gates which
+For **tnls-rendezvous**, that split becomes literal: the tunnel is the *control plane* (it gates which
 file a teammate may fetch, and for how long) and **BitTorrent is the data plane** — the file
 bytes move peer-to-peer and never pass through the relay. The tunnel even *bootstraps* the
 swarm: the seeder advertises its peer address through the scoped `request_file` call, so the
@@ -51,30 +52,29 @@ downloader connects directly instead of waiting on the BitTorrent DHT.
 # 1. start the relay (or just use the live one at wss://tunnel.locker)
 cargo run -p relay
 
-# 2. open a 2-minute, read-only tunnel to the sample MCP server (another terminal)
-cargo build -p mcp-demo
-cargo run -p tunnel-locker -- open ./target/debug/mcp-demo --ttl 2m --scope read
+# 2. open a 2-minute, read-only tunnel to the sample MCP server (plugin)
+cargo run -p tnls -- --ttl 2m --scope read demo serve
 #   → prints a link like http://127.0.0.1:8787/t/<id>#<token>
 
 # 3. open the link as a "teammate" in a browser:
 #      - call `read` (path: demo/notes.txt)  → succeeds
 #      - raw-call `shell` {"cmd":"echo hi"}   → refused, out of scope
 #
-# 4. let the TTL lapse → the link goes dead live, or
-#    cargo run -p tunnel-locker -- close   # revoke on demand (SIGTERM via pidfile)
+# 4. let the 2-minute TTL lapse → the link goes dead live,
+#    or run `cargo run -p tnls -- close` from a third terminal to revoke on demand.
 ```
 
 Or just `./demo.sh` (boots the relay and opens the tunnel; Ctrl-C tears down).
 
-## Demo — sending a file (tnls)
+## Demo — sending a file (tnls-rendezvous)
 
 ```bash
 # seed a file and open a scoped link (defaults to --relay wss://tunnel.locker)
-cargo run -p tnls -- share ./big.mov --ttl 30m
+cargo run -p tnls -- rendezvous share ./big.mov --ttl 30m
 #   → prints https://tunnel.locker/t/<id>#<token>
 
 # on another machine, fetch it over BitTorrent through the scoped link
-cargo run -p tnls -- get 'https://tunnel.locker/t/<id>#<token>' --out ./downloads
+cargo run -p tnls -- rendezvous get 'https://tunnel.locker/t/<id>#<token>' --out ./downloads
 ```
 
 The magnet is reachable **only** through the live, scoped link; close the share (or let the
@@ -92,11 +92,13 @@ fragment (`#…`) so it is never sent in an HTTP request line to the relay.
 
 | Crate | Role |
 |-------|------|
-| `tunnel-locker-core` | Pure core: HMAC token, scope filter, per-call decision, TTL parse, frames. Exhaustively unit-tested, no I/O. |
-| `relay` | Axum WS pairing service (binary: `relay`). Pairs by `tunnel_id` via a pluggable `Backplane` (in-memory, or Redis for multi-instance). The only deployed component. |
-| `tunnel-locker` | The `tunnel` CLI: spawns the MCP child over stdio, bridges to the relay, enforces scope + TTL. |
-| `tnls` | The `tnls` CLI: BitTorrent (librqbit) file sharing over a tunnel. Subcommands: `share` / `get` / `seed` / `fetch` / `mcp-serve` (internal). |
-| `mcp-demo` | Sample MCP server exposing `read` + `shell` (binary: `mcp-demo`). |
+| `tnls-core` | Pure core: HMAC token, scope filter, per-call decision, TTL parse, frames. Exhaustively unit-tested, no I/O. |
+| `tnls-tunnel` | The tunnel **agent** library: `session::open` (secret, scope, TTL), `McpChild` (rmcp client over TokioChildProcess). |
+| `tnls-plugin` | The `describe` manifest contract shared by host + plugins. |
+| `tnls` | The host binary (`open`/`close`/`plugins` + plugin dispatch). |
+| `plugins/demo` | `tnls-demo`: sample rmcp MCP server (read + shell). Subcommands: `serve` \| `describe`. |
+| `plugins/rendezvous` | `tnls-rendezvous`: file sending over BitTorrent (librqbit). Subcommands: `share` \| `get` \| `seed` \| `fetch` \| `describe`. |
+| `relay` | Rocket WS pairing service (binary: `relay`). In-memory, no state past session. The only deployed component. |
 | `viewer/*.html` | Static viewer / landing / stats pages, no build step — `include_str!`'d into the relay binary. |
 
 ## Tests
@@ -105,25 +107,22 @@ fragment (`#…`) so it is never sent in an HTTP request line to the relay.
 cargo test --workspace
 ```
 
-`tunnel-locker-core` is unit-tested exhaustively; `relay` has in-process WS pairing **and**
-cross-instance backplane tests; `tunnel-locker` and `tnls` have real-socket end-to-end tests
-(scope enforcement, and a hermetic BitTorrent transfer asserting byte-for-byte equality).
+The correctness core (`tnls-core`) is unit-tested exhaustively; `relay` has an in-process WS
+pairing test; `tnls-tunnel` has a real-socket end-to-end test proving `read` succeeds and `shell` is
+refused (MCP is now `rmcp` on both stdio ends). File-sharing transfer is tested in `tnls-rendezvous`.
 
 ## Deploy
 
 Fly.io app `tunnel-locker` (region `iad`). A multi-stage Dockerfile builds **only** the
 `relay` binary; the viewer HTML is `include_str!`'d into it, and TLS is terminated by Fly so
 the relay speaks plain `ws` internally on `$PORT`. Aggregate-only analytics (no trackers, no
-cookies, no stored IPs) persist to a Fly volume. Set `REDIS_URL` (a `rediss://` URL) to enable
-the multi-instance Redis backplane and scale out; without it the relay runs single-instance
-in-memory.
+cookies, no stored IPs) persist to a Fly volume.
 
 ## Status & future work
 
-`tnls` (BitTorrent core, magnet-through-tunnel, and peer **rendezvous**) is built and tested.
-The **Redis multi-machine relay** backplane is built and verified cross-instance, with the
-live rollout in progress. **Next:** NAT hole-punching for cross-internet transfers, a native
-GUI (egui) for `tnls`, payload encryption beyond the transport (so even the relay operator
-can't read tool I/O), and multi-viewer sessions with per-viewer scopes + audit logging.
+`tnls-rendezvous` (BitTorrent core, magnet-through-tunnel, and peer **rendezvous**) is built
+and tested. **Next:** NAT hole-punching for cross-internet transfers, a native GUI (egui) for
+`tnls`, payload encryption beyond the transport (so even the relay operator can't read tool
+I/O), and multi-viewer sessions with per-viewer scopes + audit logging.
 
 Design specs and phased implementation plans live in [`docs/superpowers/`](docs/superpowers/).

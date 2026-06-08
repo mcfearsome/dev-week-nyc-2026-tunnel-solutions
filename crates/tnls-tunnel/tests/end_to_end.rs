@@ -73,23 +73,27 @@ async fn read_link(expected_relay_port: u16) -> (String, String) {
 
 #[tokio::test]
 async fn read_succeeds_shell_refused() {
-    build("mcp-demo");
+    build("tnls-demo");
 
     // relay on an ephemeral port
     let port = spawn_relay().await;
     let relay_url = format!("ws://127.0.0.1:{port}");
 
     // tunnel open --scope read
-    let mcp = format!("{}/../../target/debug/mcp-demo", env!("CARGO_MANIFEST_DIR"));
-    let open = tunnel_locker::session::OpenArgs {
+    let mcp = format!(
+        "{}/../../target/debug/tnls-demo",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let open = tnls_tunnel::session::OpenArgs {
         server: mcp,
-        server_args: vec![],
+        server_args: vec!["serve".to_string()],
         ttl: Duration::from_secs(120),
         scope: vec!["read".into()],
         relay: relay_url.clone(),
+        env: vec![],
     };
     tokio::spawn(async move {
-        tunnel_locker::session::open(open).await.unwrap();
+        tnls_tunnel::session::open(open).await.unwrap();
     });
 
     let (id, token) = read_link(port).await;

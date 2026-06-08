@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/tunnel-locker-core", "crates/relay", "crates/tunnel-locker", "crates/mcp-demo", "crates/tnls"]
+members = ["crates/tnls-core", "crates/relay", "crates/tnls-tunnel", "crates/plugins/demo", "crates/tnls", "crates/tnls-plugin", "crates/plugins/rendezvous"]
 
 [workspace.dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "io-util", "io-std", "net", "signal", "sync", "time", "fs"] }

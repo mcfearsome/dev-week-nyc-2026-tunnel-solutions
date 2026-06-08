@@ -9,6 +9,7 @@ use std::sync::Arc;
 /// Everything needed to seed a file and to hand a peer a magnet.
 #[derive(Debug, Clone)]
 pub struct ShareMeta {
+    #[allow(dead_code)] // used in tests and future consumers
     pub info_hash_hex: String,
     pub name: String,
     pub size: u64,
@@ -124,7 +125,9 @@ pub struct Progress {
     pub downloaded: u64,
     pub total: u64,
     pub finished: bool,
+    #[allow(dead_code)] // available for callers that want speed metrics
     pub down_speed_bps: f64,
+    #[allow(dead_code)] // available for callers that want speed metrics
     pub up_speed_bps: f64,
 }
 
@@ -155,6 +158,7 @@ impl FetchHandle {
                 .unwrap_or(0.0),
         }
     }
+    #[allow(dead_code)] // used in #[cfg(test)] and future consumers
     pub async fn wait(&self) -> Result<()> {
         self.handle.wait_until_completed().await.context("download")
     }
@@ -203,6 +207,63 @@ pub async fn fetch(magnet: &str, out_dir: &Path, net: NetOpts) -> Result<FetchHa
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn seed_then_fetch_moves_bytes_over_loopback() {
+        // unique temp dirs
+        let base = std::env::temp_dir().join(format!("tnls-loop-{}", std::process::id()));
+        let seed_dir = base.join("seed");
+        let fetch_dir = base.join("fetch");
+        std::fs::create_dir_all(&seed_dir).unwrap();
+        std::fs::create_dir_all(&fetch_dir).unwrap();
+
+        // a ~512KB file with recognizable content
+        let payload: Vec<u8> = (0..512 * 1024).map(|i| (i % 251) as u8).collect();
+        let src = seed_dir.join("payload.bin");
+        std::fs::write(&src, &payload).unwrap();
+
+        // seed: DHT off, fixed loopback port
+        let port = 47_112u16; // different from loopback.rs to avoid conflicts
+        let meta = create_share(&src, &[]).await.unwrap();
+        let _seeder = seed(
+            &meta,
+            &seed_dir,
+            NetOpts {
+                disable_dht: true,
+                listen_port: Some(port),
+                enable_upnp: false,
+                initial_peers: vec![],
+            },
+        )
+        .await
+        .unwrap();
+
+        // fetch: DHT off, connect straight to the seeder via initial_peers
+        let peer = format!("127.0.0.1:{port}").parse().unwrap();
+        let dl = fetch(
+            &meta.magnet,
+            &fetch_dir,
+            NetOpts {
+                disable_dht: true,
+                listen_port: None,
+                enable_upnp: false,
+                initial_peers: vec![peer],
+            },
+        )
+        .await
+        .unwrap();
+
+        // wait (bounded) for completion
+        tokio::time::timeout(std::time::Duration::from_secs(30), dl.wait())
+            .await
+            .expect("download timed out — peers didn't connect")
+            .expect("download errored");
+
+        let got = std::fs::read(fetch_dir.join("payload.bin")).expect("fetched file missing");
+        assert_eq!(got, payload, "fetched bytes must equal the source");
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
 
     #[test]
     fn magnet_has_infohash_name_and_tracker() {
