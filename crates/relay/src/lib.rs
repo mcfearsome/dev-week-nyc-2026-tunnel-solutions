@@ -38,9 +38,10 @@ fn ws_config() -> ws::Config {
     }
 }
 
-/// Real client IP from Fly's proxy header (falls back to XFF, then "unknown"). The single typed
-/// place an IP enters memory before being salted-hashed for unique-visitor dedupe — never stored
-/// or logged raw. The guard is infallible (always succeeds; `"unknown"` when no proxy header).
+/// Real client IP for the salted-hash unique-visitor dedupe — never stored or logged raw. Behind
+/// Cloudflare's proxy Fly sees CF's edge IP, so prefer `cf-connecting-ip` (the real visitor), then
+/// Fly's header (direct), then XFF, then "unknown". The single typed place an IP enters memory;
+/// the guard is infallible (always succeeds).
 pub struct ClientIp(pub String);
 
 #[rocket::async_trait]
@@ -50,7 +51,8 @@ impl<'r> FromRequest<'r> for ClientIp {
     async fn from_request(req: &'r Request<'_>) -> Outcome<Self, Self::Error> {
         let ip = req
             .headers()
-            .get_one("fly-client-ip")
+            .get_one("cf-connecting-ip")
+            .or_else(|| req.headers().get_one("fly-client-ip"))
             .or_else(|| req.headers().get_one("x-forwarded-for"))
             .map(|s| s.split(',').next().unwrap_or(s).trim().to_string())
             .unwrap_or_else(|| "unknown".into());
