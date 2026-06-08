@@ -89,3 +89,14 @@
 
 ## Optional 30-second teaser cut
 Hero animation (0–5s) → Beat 2 Visual C only: `read ✓` then `shell ⊘ refused` (5–22s) → end card (22–30s). VO: one line — "A pluggable host for capability-scoped MCP tunnels: share exactly the tools you allow, for exactly as long as you allow."
+
+---
+
+## Post-merge media TODO (once the host/plugin refactor lands on `main`)
+
+The refactor leaves the **relay, viewer, and landing page untouched**, so the existing screenshots (`01`–`04` in `media/`) stay valid — including the scope-enforcement viewer shot, which is relay-served and unchanged. The thing that actually changes is the **terminal commands** shown in the video:
+
+- [ ] **Re-record the video** with the "Target" column of the Command state table (`tnls plugins`, `tnls demo serve`, `tnls rendezvous share`/`get`, `tnls close`).
+- [ ] **(Optional) Add a `tnls plugins` screenshot** to `media/` to showcase the plugin model on the landing/CLI.
+- [ ] Confirm the agent banner string in the recording matches (`tunnel close` → `tnls close`).
+- [ ] No need to touch `01`–`04` or the landing/stats shots — they don't depend on the CLI surface.
