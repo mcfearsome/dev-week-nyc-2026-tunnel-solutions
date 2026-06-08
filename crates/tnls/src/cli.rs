@@ -1,7 +1,10 @@
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "tnls", about = "capability-scoped file sending over BitTorrent")]
+#[command(
+    name = "tnls",
+    about = "capability-scoped file sending over BitTorrent"
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,
@@ -39,8 +42,13 @@ pub enum Command {
     /// Internal: the MCP server the tunnel spawns.
     #[command(hide = true)]
     McpServe {
-        #[arg(long)] magnet: String,
-        #[arg(long)] name: String,
-        #[arg(long)] size: u64,
+        #[arg(long)]
+        magnet: String,
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        size: u64,
+        #[arg(long)]
+        peer: Vec<String>,
     },
 }

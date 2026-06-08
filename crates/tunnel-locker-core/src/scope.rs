@@ -9,7 +9,10 @@ impl Claims {
 
 /// Keep only tools whose name is in scope. Produces the filtered `tools/list`.
 pub fn filter_tools(all: &[Tool], scope: &[String]) -> Vec<Tool> {
-    all.iter().filter(|t| scope.iter().any(|s| s == &t.name)).cloned().collect()
+    all.iter()
+        .filter(|t| scope.iter().any(|s| s == &t.name))
+        .cloned()
+        .collect()
 }
 
 /// The per-call enforcement decision. Order matters: TTL is checked before scope.
@@ -36,11 +39,19 @@ mod tests {
     use serde_json::json;
 
     fn claims() -> Claims {
-        Claims { tunnel_id: "t".into(), scope: vec!["read".into()], exp: 1000 }
+        Claims {
+            tunnel_id: "t".into(),
+            scope: vec!["read".into()],
+            exp: 1000,
+        }
     }
 
     fn tool(name: &str) -> Tool {
-        Tool { name: name.into(), description: None, input_schema: json!({}) }
+        Tool {
+            name: name.into(),
+            description: None,
+            input_schema: json!({}),
+        }
     }
 
     #[test]
@@ -64,7 +75,10 @@ mod tests {
 
     #[test]
     fn out_of_scope_refused() {
-        assert_eq!(decide_call(&claims(), 999, "shell"), CallDecision::OutOfScope);
+        assert_eq!(
+            decide_call(&claims(), 999, "shell"),
+            CallDecision::OutOfScope
+        );
     }
 
     #[test]

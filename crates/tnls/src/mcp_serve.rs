@@ -6,6 +6,7 @@ pub struct ShareInfo {
     pub magnet: String,
     pub name: String,
     pub size: u64,
+    pub peers: Vec<String>,
 }
 
 pub fn tool_list() -> Value {
@@ -19,7 +20,9 @@ pub fn tool_list() -> Value {
     ]})
 }
 
-fn text(s: &str) -> Value { json!({ "content": [ { "type": "text", "text": s } ] }) }
+fn text(s: &str) -> Value {
+    json!({ "content": [ { "type": "text", "text": s } ] })
+}
 
 /// Pure dispatch. Returns None for notifications.
 pub fn handle(req: &Value, share: &ShareInfo) -> Option<Value> {
@@ -36,7 +39,10 @@ pub fn handle(req: &Value, share: &ShareInfo) -> Option<Value> {
             let name = req.get("params").and_then(|p| p.get("name")).and_then(|n| n.as_str()).unwrap_or("");
             let content = match name {
                 "list_shares" => text(&format!("{} ({} bytes)", share.name, share.size)),
-                "request_file" => text(&share.magnet),
+                "request_file" => {
+                    let body = serde_json::json!({ "magnet": share.magnet, "peers": share.peers });
+                    text(&body.to_string())
+                }
                 "status" => text("seeding (live stats not available in v1)"),
                 other => return Some(json!({ "jsonrpc":"2.0","id":id,
                     "error":{"code":-32601,"message":format!("unknown tool {other}")} })),
@@ -55,11 +61,17 @@ pub async fn serve(share: ShareInfo) -> anyhow::Result<()> {
     let mut lines = BufReader::new(tokio::io::stdin()).lines();
     let mut stdout = tokio::io::stdout();
     while let Some(line) = lines.next_line().await? {
-        if line.trim().is_empty() { continue; }
-        let Ok(req) = serde_json::from_str::<Value>(&line) else { continue };
+        if line.trim().is_empty() {
+            continue;
+        }
+        let Ok(req) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
         if let Some(resp) = handle(&req, &share) {
-            let mut out = serde_json::to_string(&resp)?; out.push('\n');
-            stdout.write_all(out.as_bytes()).await?; stdout.flush().await?;
+            let mut out = serde_json::to_string(&resp)?;
+            out.push('\n');
+            stdout.write_all(out.as_bytes()).await?;
+            stdout.flush().await?;
         }
     }
     Ok(())
@@ -68,22 +80,45 @@ pub async fn serve(share: ShareInfo) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn share() -> ShareInfo { ShareInfo { magnet: "magnet:?xt=urn:btih:abc".into(), name: "f.bin".into(), size: 9 } }
+    fn share() -> ShareInfo {
+        ShareInfo {
+            magnet: "magnet:?xt=urn:btih:abc".into(),
+            name: "f.bin".into(),
+            size: 9,
+            peers: vec!["127.0.0.1:6881".into()],
+        }
+    }
 
     #[test]
-    fn request_file_returns_the_magnet() {
-        let resp = handle(&json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"request_file"}}), &share()).unwrap();
-        assert_eq!(resp["result"]["content"][0]["text"], "magnet:?xt=urn:btih:abc");
+    fn request_file_returns_magnet_and_peers() {
+        let resp = handle(
+            &json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"request_file"}}),
+            &share(),
+        )
+        .unwrap();
+        let text = resp["result"]["content"][0]["text"].as_str().unwrap();
+        let v: serde_json::Value = serde_json::from_str(text).unwrap();
+        assert_eq!(v["magnet"], "magnet:?xt=urn:btih:abc");
+        assert_eq!(v["peers"][0], "127.0.0.1:6881");
     }
     #[test]
     fn tools_list_has_request_file() {
         let list = tool_list();
-        let names: Vec<&str> = list["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
+        let names: Vec<&str> = list["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["name"].as_str().unwrap())
+            .collect();
         assert!(names.contains(&"request_file"));
     }
     #[test]
     fn unknown_tool_errors() {
-        let resp = handle(&json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"nope"}}), &share()).unwrap();
+        let resp = handle(
+            &json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"nope"}}),
+            &share(),
+        )
+        .unwrap();
         assert_eq!(resp["error"]["code"], -32601);
     }
 }

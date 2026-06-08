@@ -1,7 +1,10 @@
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "tunnel", about = "Ephemeral, capability-scoped tunnel for a local MCP server")]
+#[command(
+    name = "tunnel",
+    about = "Ephemeral, capability-scoped tunnel for a local MCP server"
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,
@@ -32,7 +35,11 @@ pub enum Command {
 
 /// Split a `--scope a,b , c` string into trimmed, non-empty names.
 pub fn parse_scope(s: &str) -> Vec<String> {
-    s.split(',').map(|x| x.trim()).filter(|x| !x.is_empty()).map(String::from).collect()
+    s.split(',')
+        .map(|x| x.trim())
+        .filter(|x| !x.is_empty())
+        .map(String::from)
+        .collect()
 }
 
 #[cfg(test)]
@@ -48,9 +55,17 @@ mod tests {
 
     #[test]
     fn open_parses_flags_not_as_server_args() {
-        let cli = Cli::try_parse_from(["tunnel", "open", "./srv", "--ttl", "2m", "--scope", "read"]).unwrap();
+        let cli =
+            Cli::try_parse_from(["tunnel", "open", "./srv", "--ttl", "2m", "--scope", "read"])
+                .unwrap();
         match cli.command {
-            Command::Open { server, server_args, ttl, scope, .. } => {
+            Command::Open {
+                server,
+                server_args,
+                ttl,
+                scope,
+                ..
+            } => {
                 assert_eq!(server, "./srv");
                 assert!(server_args.is_empty());
                 assert_eq!(ttl, "2m");

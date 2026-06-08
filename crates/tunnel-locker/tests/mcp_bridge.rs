@@ -11,13 +11,21 @@ fn mcp_demo_bin() -> String {
 
 #[tokio::test]
 async fn handshake_lists_tools_and_calls_shell() {
-    let mut child = tunnel_locker::mcp::McpChild::spawn(&mcp_demo_bin(), &[]).await.unwrap();
+    let mut child = tunnel_locker::mcp::McpChild::spawn(&mcp_demo_bin(), &[])
+        .await
+        .unwrap();
 
     let names: Vec<String> = child.tools.iter().map(|t| t.name.clone()).collect();
     assert_eq!(names, vec!["read".to_string(), "shell".to_string()]);
 
-    let out = child.call_tool("shell", json!({"cmd":"echo bridged"})).await.unwrap();
-    assert_eq!(out["content"][0]["text"].as_str().unwrap().trim(), "bridged");
+    let out = child
+        .call_tool("shell", json!({"cmd":"echo bridged"}))
+        .await
+        .unwrap();
+    assert_eq!(
+        out["content"][0]["text"].as_str().unwrap().trim(),
+        "bridged"
+    );
 
     child.kill().await;
 }

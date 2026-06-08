@@ -102,7 +102,7 @@ In `mcp_serve.rs`: add `pub peers: Vec<String>` to `ShareInfo`. Change the `requ
 ```
 (`list_shares`/`status` arms unchanged.)
 
-In `cli.rs`, the `McpServe` variant gains: `#[arg(long)] peer: Vec<String>,`. In `main.rs`, the `McpServe` handler builds `ShareInfo { magnet, name, size, peers }`.
+In `cli.rs`, the `McpServe` variant gains: `#[arg(long)] peer: Vec<String>,`. In `main.rs`, update the `Command::McpServe { magnet, name, size, peer }` match arm to **also bind `peer`**, and build `ShareInfo { magnet, name, size, peers: peer }`.
 
 - [ ] **Step 4: Run → PASS** (3 mcp_serve tests). Commit: `feat(tnls): mcp-serve advertises peer addresses`.
 
