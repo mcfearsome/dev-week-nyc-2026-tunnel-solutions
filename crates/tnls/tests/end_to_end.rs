@@ -7,6 +7,28 @@ fn build(pkg: &str) {
         .unwrap();
     assert!(st.success(), "building {pkg} failed");
 }
+
+/// Launch a Rocket relay on an OS-assigned port; an `on_liftoff` fairing reports the bound
+/// port back once Rocket has bound the socket. Mirrors the relay crate's own test helper.
+async fn spawn_relay() -> u16 {
+    let (tx, rx) = tokio::sync::oneshot::channel::<u16>();
+    let figment = rocket::Config::figment()
+        .merge(("address", "127.0.0.1"))
+        .merge(("port", 0));
+    let rocket =
+        relay::build_rocket()
+            .configure(figment)
+            .attach(rocket::fairing::AdHoc::on_liftoff("test port", move |r| {
+                let port = r.config().port;
+                Box::pin(async move {
+                    let _ = tx.send(port);
+                })
+            }));
+    tokio::spawn(async move {
+        let _ = rocket.launch().await;
+    });
+    rx.await.expect("relay should report its bound port")
+}
 async fn read_link(relay_port: u16) -> String {
     let path = std::env::temp_dir().join("tunnel-latest.pid");
     // Remove any stale pidfile from a previous run so we don't pick up the wrong link.
@@ -33,11 +55,7 @@ async fn get_transfers_the_file_through_the_tunnel() {
     build("tnls"); // the agent spawns target/debug/tnls mcp-serve
 
     // local relay
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let port = listener.local_addr().unwrap().port();
-    tokio::spawn(async move {
-        axum::serve(listener, relay::build_app()).await.unwrap();
-    });
+    let port = spawn_relay().await;
     let relay_url = format!("ws://127.0.0.1:{port}");
 
     // a temp file to "share"

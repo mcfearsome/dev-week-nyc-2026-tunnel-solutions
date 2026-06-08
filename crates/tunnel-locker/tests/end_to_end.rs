@@ -11,6 +11,28 @@ fn build(pkg: &str) {
     assert!(st.success(), "building {pkg} failed");
 }
 
+/// Launch a Rocket relay on an OS-assigned port; an `on_liftoff` fairing reports the bound
+/// port back once Rocket has bound the socket. Mirrors the relay crate's own test helper.
+async fn spawn_relay() -> u16 {
+    let (tx, rx) = tokio::sync::oneshot::channel::<u16>();
+    let figment = rocket::Config::figment()
+        .merge(("address", "127.0.0.1"))
+        .merge(("port", 0));
+    let rocket =
+        relay::build_rocket()
+            .configure(figment)
+            .attach(rocket::fairing::AdHoc::on_liftoff("test port", move |r| {
+                let port = r.config().port;
+                Box::pin(async move {
+                    let _ = tx.send(port);
+                })
+            }));
+    tokio::spawn(async move {
+        let _ = rocket.launch().await;
+    });
+    rx.await.expect("relay should report its bound port")
+}
+
 async fn next_json<S>(s: &mut S) -> Value
 where
     S: StreamExt<Item = Result<TMsg, tokio_tungstenite::tungstenite::Error>> + Unpin,
@@ -54,11 +76,7 @@ async fn read_succeeds_shell_refused() {
     build("mcp-demo");
 
     // relay on an ephemeral port
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let port = listener.local_addr().unwrap().port();
-    tokio::spawn(async move {
-        axum::serve(listener, relay::build_app()).await.unwrap();
-    });
+    let port = spawn_relay().await;
     let relay_url = format!("ws://127.0.0.1:{port}");
 
     // tunnel open --scope read
