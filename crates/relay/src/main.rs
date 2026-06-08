@@ -13,9 +13,20 @@ async fn main() -> anyhow::Result<()> {
     println!("relay listening on http://{addr}");
 
     if let Ok(url) = std::env::var("REDIS_URL") {
-        let bp = RedisBackplane::connect(&url, max_tunnels()).await?;
-        println!("relay: using RedisBackplane");
-        axum::serve(listener, relay::build_app_with(Arc::new(bp))).await?;
+        match RedisBackplane::connect(&url, max_tunnels()).await {
+            Ok(bp) => {
+                println!("relay: using RedisBackplane (multi-instance)");
+                axum::serve(listener, relay::build_app_with(Arc::new(bp))).await?;
+            }
+            Err(e) => {
+                // Degrade to single-instance rather than taking the relay down. Loud, not silent.
+                eprintln!(
+                    "relay: REDIS_URL is set but Redis connect failed ({e}); \
+                     falling back to LocalBackplane (single-instance). Fix Redis to enable scale-out."
+                );
+                axum::serve(listener, relay::build_app()).await?;
+            }
+        }
     } else {
         axum::serve(listener, relay::build_app()).await?;
     }

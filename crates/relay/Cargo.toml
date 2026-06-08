@@ -14,7 +14,9 @@ axum = { version = "0.7", features = ["ws"] }
 getrandom = "0.2"
 async-trait = "0.1"
 bytes = "1"
-redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
+# rustls TLS + bundled webpki roots: rediss:// (Upstash etc.) works, and no system CA store
+# is needed in the slim runtime container.
+redis = { version = "0.27", features = ["tokio-comp", "connection-manager", "tokio-rustls-comp", "tls-rustls-webpki-roots"] }
 
 [dev-dependencies]
 tokio-tungstenite = "0.23"
