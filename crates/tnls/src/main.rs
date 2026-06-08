@@ -25,7 +25,7 @@ async fn main() -> Result<()> {
             std::future::pending::<()>().await; // seed until killed
             Ok(())
         }
-        Command::McpServe { magnet, name, size } => tnls::mcp_serve::serve(tnls::mcp_serve::ShareInfo { magnet, name, size }).await,
+        Command::McpServe { magnet, name, size, peer } => tnls::mcp_serve::serve(tnls::mcp_serve::ShareInfo { magnet, name, size, peers: peer }).await,
         Command::Get { link, out } => tnls::get::run_get(&link, std::path::Path::new(&out)).await,
         Command::Share { path, relay, ttl } => {
             let ttl = tunnel_locker_core::parse_ttl(&ttl).map_err(|e| anyhow::anyhow!(e))?;

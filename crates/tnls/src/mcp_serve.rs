@@ -6,6 +6,7 @@ pub struct ShareInfo {
     pub magnet: String,
     pub name: String,
     pub size: u64,
+    pub peers: Vec<String>,
 }
 
 pub fn tool_list() -> Value {
@@ -36,7 +37,10 @@ pub fn handle(req: &Value, share: &ShareInfo) -> Option<Value> {
             let name = req.get("params").and_then(|p| p.get("name")).and_then(|n| n.as_str()).unwrap_or("");
             let content = match name {
                 "list_shares" => text(&format!("{} ({} bytes)", share.name, share.size)),
-                "request_file" => text(&share.magnet),
+                "request_file" => {
+                    let body = serde_json::json!({ "magnet": share.magnet, "peers": share.peers });
+                    text(&body.to_string())
+                }
                 "status" => text("seeding (live stats not available in v1)"),
                 other => return Some(json!({ "jsonrpc":"2.0","id":id,
                     "error":{"code":-32601,"message":format!("unknown tool {other}")} })),
@@ -68,12 +72,18 @@ pub async fn serve(share: ShareInfo) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn share() -> ShareInfo { ShareInfo { magnet: "magnet:?xt=urn:btih:abc".into(), name: "f.bin".into(), size: 9 } }
+    fn share() -> ShareInfo {
+        ShareInfo { magnet: "magnet:?xt=urn:btih:abc".into(), name: "f.bin".into(), size: 9,
+                    peers: vec!["127.0.0.1:6881".into()] }
+    }
 
     #[test]
-    fn request_file_returns_the_magnet() {
+    fn request_file_returns_magnet_and_peers() {
         let resp = handle(&json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"request_file"}}), &share()).unwrap();
-        assert_eq!(resp["result"]["content"][0]["text"], "magnet:?xt=urn:btih:abc");
+        let text = resp["result"]["content"][0]["text"].as_str().unwrap();
+        let v: serde_json::Value = serde_json::from_str(text).unwrap();
+        assert_eq!(v["magnet"], "magnet:?xt=urn:btih:abc");
+        assert_eq!(v["peers"][0], "127.0.0.1:6881");
     }
     #[test]
     fn tools_list_has_request_file() {

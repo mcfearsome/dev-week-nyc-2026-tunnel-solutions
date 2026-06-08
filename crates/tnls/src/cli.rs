@@ -42,5 +42,6 @@ pub enum Command {
         #[arg(long)] magnet: String,
         #[arg(long)] name: String,
         #[arg(long)] size: u64,
+        #[arg(long)] peer: Vec<String>,
     },
 }
