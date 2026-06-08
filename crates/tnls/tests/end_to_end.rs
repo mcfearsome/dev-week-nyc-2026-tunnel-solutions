@@ -53,7 +53,9 @@ async fn get_transfers_the_file_through_the_tunnel() {
     assert!(rf.magnet.starts_with("magnet:?xt=urn:btih:"), "got {}", rf.magnet);
     assert!(rf.peers.iter().any(|p| p.ip().is_loopback()), "must advertise a loopback peer: {:?}", rf.peers);
 
-    // download via the advertised loopback peer → completes directly (no DHT)
+    // download via the advertised loopback peer → completes directly (no DHT).
+    // The getter uses initial_peers=[127.0.0.1:P] + disable_dht=true, making this
+    // hermetic: bytes flow entirely over loopback, no network/tracker needed.
     let out = dir.join("dl");
     std::fs::create_dir_all(&out).unwrap();
     let dl = tnls::bittorrent::fetch(&rf.magnet, &out, tnls::bittorrent::NetOpts {
