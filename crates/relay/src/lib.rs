@@ -53,6 +53,7 @@ pub fn build_app() -> Router {
     Router::new()
         .route("/", get(landing_page))
         .route("/healthz", get(|| async { "ok" }))
+        .route("/whoami", get(whoami))
         .route("/stats", get(stats_page))
         .route("/stats.json", get(stats_json))
         .route("/t/:id", get(viewer_page))
@@ -71,6 +72,10 @@ fn client_ip(headers: &HeaderMap) -> String {
         .and_then(|v| v.to_str().ok())
         .map(|s| s.split(',').next().unwrap_or(s).trim().to_string())
         .unwrap_or_else(|| "unknown".into())
+}
+
+async fn whoami(headers: HeaderMap) -> String {
+    client_ip(&headers) // "" when no proxy header (local); the caller's public IP behind Fly
 }
 
 async fn landing_page(State(s): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
