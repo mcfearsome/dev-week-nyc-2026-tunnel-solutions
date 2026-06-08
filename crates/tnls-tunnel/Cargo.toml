@@ -7,10 +7,6 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/mcfearsome/tunnel-solutions"
 keywords = ["mcp", "tunnel", "cli", "websocket", "capability"]
 
-[[bin]]
-name = "tunnel"
-path = "src/main.rs"
-
 [dependencies]
 tnls-core = { path = "../tnls-core", version = "0.1.0" }
 rmcp = { version = "1.7", features = ["client", "transport-child-process"] }
@@ -21,7 +17,6 @@ anyhow.workspace = true
 futures-util.workspace = true
 tokio-tungstenite = { version = "0.23", features = ["rustls-tls-webpki-roots"] }
 rustls = { version = "0.23", features = ["ring"] }
-clap = { version = "4", features = ["derive"] }
 getrandom = "0.2"
 hex = "0.4"
 nix = { version = "0.29", features = ["signal", "process"] }

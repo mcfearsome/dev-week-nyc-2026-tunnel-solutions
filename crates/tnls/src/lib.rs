@@ -1,1 +1,3 @@
-// host crate — see Chunk 5
+pub mod cli;
+pub mod discover;
+pub mod dispatch;

@@ -4,3 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+tnls-core = { path = "../tnls-core" }
+tnls-tunnel = { path = "../tnls-tunnel" }
+tnls-plugin = { path = "../tnls-plugin" }
+clap = { version = "4", features = ["derive"] }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+rustls = { version = "0.23", features = ["ring"] }
+
+[dev-dependencies]
+tempfile = "3"

@@ -3387,6 +3387,17 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 [[package]]
 name = "tnls"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "rustls",
+ "serde_json",
+ "tempfile",
+ "tnls-core",
+ "tnls-plugin",
+ "tnls-tunnel",
+ "tokio",
+]
 
 [[package]]
 name = "tnls-core"
@@ -3455,7 +3466,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum 0.7.9",
- "clap",
  "futures-util",
  "getrandom 0.2.17",
  "hex 0.4.3",
