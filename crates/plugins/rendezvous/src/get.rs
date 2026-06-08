@@ -142,13 +142,17 @@ pub async fn run_get(link: &str, out_dir: &std::path::Path) -> Result<()> {
     let rf = retrieve_magnet(link).await?;
     println!("magnet acquired — downloading…");
     std::fs::create_dir_all(out_dir)?;
+    // Test hook: hermetic fetch (no DHT/UPnP) when TNLS_DISABLE_DHT is set, so the e2e
+    // downloads straight from the advertised loopback peer and the process exits promptly
+    // (no lingering DHT/UPnP tasks). Production default (env absent) keeps DHT + UPnP on.
+    let hermetic = std::env::var_os("TNLS_DISABLE_DHT").is_some_and(|v| !v.is_empty());
     let dl = crate::bittorrent::fetch(
         &rf.magnet,
         out_dir,
         crate::bittorrent::NetOpts {
-            disable_dht: false,
+            disable_dht: hermetic,
             listen_port: None,
-            enable_upnp: true,
+            enable_upnp: !hermetic,
             initial_peers: rf.peers,
         },
     )

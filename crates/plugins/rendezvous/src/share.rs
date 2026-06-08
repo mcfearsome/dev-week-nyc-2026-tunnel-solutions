@@ -60,13 +60,17 @@ pub async fn run_share(path: String) -> Result<()> {
     let relay = std::env::var("TNLS_RELAY").unwrap_or_default();
     let peers = gather_peers(port, &relay).await;
 
+    // Test hook: hermetic seeding without DHT/UPnP. When TNLS_DISABLE_DHT is set, the
+    // seeder skips the fixed-port DHT bind (UDP 6881) and UPnP so the e2e is reproducible
+    // over loopback. Production default (env absent) keeps DHT + UPnP on.
+    let hermetic = std::env::var_os("TNLS_DISABLE_DHT").is_some_and(|v| !v.is_empty());
     let seeder = seed(
         &meta,
         &data_dir,
         NetOpts {
-            disable_dht: false,
+            disable_dht: hermetic,
             listen_port: Some(port),
-            enable_upnp: true,
+            enable_upnp: !hermetic,
             initial_peers: vec![],
         },
     )
