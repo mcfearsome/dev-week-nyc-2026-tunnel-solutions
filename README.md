@@ -11,6 +11,7 @@ One pluggable host (`tnls`) + plugins — two use-cases on one primitive:
 | `tnls` | `tnls` | Host: `open`/`close`/`plugins` + plugin dispatch via `describe`. |
 | `tnls-demo` | `tnls-demo` (`plugins/demo`) | Sample rmcp MCP server plugin exposing `read` + `shell` — scoped tunnel to your local MCP server. |
 | `tnls-rendezvous` | `tnls-rendezvous` (`plugins/rendezvous`) | **Capability-scoped file sending over BitTorrent**: seed a file, hand out the magnet through a scoped link, bytes move peer-to-peer. |
+| `tnls-rendezvous-gui` | `rendezvous-gui` (`crates/rendezvous-gui`) | Native **egui** front-end for `tnls rendezvous` — drag-to-send, paste-a-link-to-receive, live progress. A thin driver over the host CLI. |
 
 **Live relay + landing page: https://tunnel.locker**
 
@@ -98,6 +99,7 @@ fragment (`#…`) so it is never sent in an HTTP request line to the relay.
 | `tnls` | The host binary (`open`/`close`/`plugins` + plugin dispatch). |
 | `plugins/demo` | `tnls-demo`: sample rmcp MCP server (read + shell). Subcommands: `serve` \| `describe`. |
 | `plugins/rendezvous` | `tnls-rendezvous`: file sending over BitTorrent (librqbit). Subcommands: `share` \| `get` \| `seed` \| `fetch` \| `describe`. |
+| `rendezvous-gui` | `tnls-rendezvous-gui`: native egui front-end driving `tnls rendezvous share`/`get` — send/receive with live progress. |
 | `relay` | Rocket WS pairing service (binary: `relay`). In-memory, no state past session. The only deployed component. |
 | `viewer/*.html` | Static viewer / landing / stats pages, no build step — `include_str!`'d into the relay binary. |
 
@@ -121,8 +123,9 @@ cookies, no stored IPs) persist to a Fly volume.
 ## Status & future work
 
 `tnls-rendezvous` (BitTorrent core, magnet-through-tunnel, and peer **rendezvous**) is built
-and tested. **Next:** NAT hole-punching for cross-internet transfers, a native GUI (egui) for
-`tnls`, payload encryption beyond the transport (so even the relay operator can't read tool
-I/O), and multi-viewer sessions with per-viewer scopes + audit logging.
+and tested, and a native **egui GUI** (`tnls-rendezvous-gui`) wraps send/receive with live
+progress. **Next:** NAT hole-punching for cross-internet transfers, payload encryption beyond
+the transport (so even the relay operator can't read tool I/O), and multi-viewer sessions with
+per-viewer scopes + audit logging.
 
 Design specs and phased implementation plans live in [`docs/superpowers/`](docs/superpowers/).

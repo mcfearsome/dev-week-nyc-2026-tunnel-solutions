@@ -13,6 +13,7 @@ a disposable link, sees only the tools/files you allow, and the link dies on TTL
 | `tnls` | `tnls` | Host: `open`/`close`/`plugins` + plugin dispatch via `describe`. |
 | `tnls-demo` | `tnls-demo` (`plugins/demo`) | Sample rmcp MCP server plugin (read + shell). |
 | `tnls-rendezvous` | `tnls-rendezvous` (`plugins/rendezvous`) | File sending over BitTorrent plugin. |
+| `tnls-rendezvous-gui` | `rendezvous-gui` (`crates/rendezvous-gui`) | Native egui front-end; a **thin subprocess driver** over `tnls rendezvous share`/`get` (no tunnel/crypto of its own — enforcement stays at the agent). |
 
 The README documents `tnls`. For architecture details trust the crates + `docs/superpowers/`. Recent work: `tnls-rendezvous` (BitTorrent + peer rendezvous — built & tested); don't assume the README is fully current.
 
@@ -30,6 +31,7 @@ The README documents `tnls`. For architecture details trust the crates + `docs/s
 | `cargo run -p tnls -- demo serve` | Open a tunnel to the demo plugin (read + shell) |
 | `cargo run -p tnls -- rendezvous share <file>` | Seed + share a file over a scoped tunnel |
 | `cargo run -p tnls -- rendezvous get <link> --out <dir>` | Fetch a shared file from a tunnel link |
+| `cargo run -p rendezvous-gui` | Launch the native egui GUI (finds `tnls` via `$TNLS_BIN`/sibling/`$PATH`) |
 
 ## Architecture
 
@@ -46,6 +48,7 @@ crates/
   tnls/                The host binary (bin: tnls): open/close/plugins + dispatches to tnls-<name> plugins via describe manifest.
   plugins/demo/        bin: tnls-demo — sample rmcp MCP server (read + shell). Subcommands: serve | describe.
   plugins/rendezvous/  bin: tnls-rendezvous — file sending over BitTorrent. Subcommands: share | get | seed | fetch | describe.
+  rendezvous-gui/      bin: tnls-rendezvous-gui — native egui front-end; spawns `tnls rendezvous share`/`get` and parses their output. Pure line parsers unit-tested; window is manual-only.
   relay/               Rocket WS pairing service (bin: relay). In-memory, no state past session. The only deployed component.
 viewer/                Static HTML (index/landing/stats), no build step — include_str!'d into the relay binary.
 docs/superpowers/      Design specs + phased implementation plans (see Design docs below).
