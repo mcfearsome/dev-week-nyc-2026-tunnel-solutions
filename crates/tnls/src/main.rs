@@ -54,7 +54,7 @@ async fn main() -> Result<()> {
         }
         Command::Get { link, out } => tnls::get::run_get(&link, std::path::Path::new(&out)).await,
         Command::Share { path, relay, ttl } => {
-            let ttl = tunnel_locker_core::parse_ttl(&ttl).map_err(|e| anyhow::anyhow!(e))?;
+            let ttl = tnls_core::parse_ttl(&ttl).map_err(|e| anyhow::anyhow!(e))?;
             tnls::share::run_share(tnls::share::ShareArgs {
                 path,
                 relay,

@@ -3314,11 +3314,25 @@ dependencies = [
  "relay",
  "reqwest",
  "serde_json",
+ "tnls-core",
  "tokio",
  "tokio-tungstenite 0.23.1",
  "tunnel-locker",
- "tunnel-locker-core",
  "urlencoding",
+]
+
+[[package]]
+name = "tnls-core"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "hmac",
+ "humantime",
+ "serde",
+ "serde_json",
+ "sha2",
+ "subtle",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -3571,23 +3585,9 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
+ "tnls-core",
  "tokio",
  "tokio-tungstenite 0.23.1",
- "tunnel-locker-core",
-]
-
-[[package]]
-name = "tunnel-locker-core"
-version = "0.1.0"
-dependencies = [
- "base64",
- "hmac",
- "humantime",
- "serde",
- "serde_json",
- "sha2",
- "subtle",
- "thiserror 1.0.69",
 ]
 
 [[package]]

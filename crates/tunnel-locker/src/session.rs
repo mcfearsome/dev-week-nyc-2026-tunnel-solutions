@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{mpsc, Notify};
 use tokio_tungstenite::tungstenite::Message;
-use tunnel_locker_core::{
+use tnls_core::{
     decide_call, filter_tools, mint, verify, AgentFrame, CallDecision, Claims, ErrorCode,
     TokenError, Tool, ViewerFrame,
 };

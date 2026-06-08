@@ -14,7 +14,7 @@ async fn main() -> anyhow::Result<()> {
             scope,
             relay,
         } => {
-            let ttl = tunnel_locker_core::parse_ttl(&ttl).map_err(anyhow::Error::msg)?;
+            let ttl = tnls_core::parse_ttl(&ttl).map_err(anyhow::Error::msg)?;
             session::open(OpenArgs {
                 server,
                 server_args,
