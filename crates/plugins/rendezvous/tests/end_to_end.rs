@@ -7,6 +7,28 @@ fn rendezvous_bin() -> String {
     env!("CARGO_BIN_EXE_tnls-rendezvous").to_string()
 }
 
+/// Launch a Rocket relay on an OS-assigned port; an `on_liftoff` fairing reports the bound
+/// port back once Rocket has bound the socket. Mirrors the relay crate's own test helper.
+async fn spawn_relay() -> u16 {
+    let (tx, rx) = tokio::sync::oneshot::channel::<u16>();
+    let figment = rocket::Config::figment()
+        .merge(("address", "127.0.0.1"))
+        .merge(("port", 0));
+    let rocket =
+        relay::build_rocket()
+            .configure(figment)
+            .attach(rocket::fairing::AdHoc::on_liftoff("test port", move |r| {
+                let port = r.config().port;
+                Box::pin(async move {
+                    let _ = tx.send(port);
+                })
+            }));
+    tokio::spawn(async move {
+        let _ = rocket.launch().await;
+    });
+    rx.await.expect("relay should report its bound port")
+}
+
 /// Wait for the link `share` publishes via the pidfile. If the share task (the agent
 /// driving the seeding child) dies first, surface ITS error instead of a misleading
 /// "never published a link" timeout — a seeder bind failure is then diagnosable.
@@ -45,12 +67,8 @@ async fn get_transfers_the_file_through_the_tunnel() {
     // from CARGO_BIN_EXE_tnls-rendezvous (see rendezvous_bin).
     let bin = rendezvous_bin();
 
-    // local relay
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let port = listener.local_addr().unwrap().port();
-    tokio::spawn(async move {
-        axum::serve(listener, relay::build_app()).await.unwrap();
-    });
+    // local relay (Rocket)
+    let port = spawn_relay().await;
     let relay_url = format!("ws://127.0.0.1:{port}");
 
     // a temp file to "share"

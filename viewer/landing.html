@@ -52,7 +52,7 @@
   h1 .mono{font-family:var(--mono);font-size:.4em;font-weight:500;letter-spacing:-.01em;color:var(--mut);display:block;margin-top:.7rem;line-height:1.5}
   .lede{color:var(--mut);font-size:1.02rem;max-width:46ch;margin-bottom:2rem}.lede b{color:var(--text);font-weight:500}
   .cta{display:flex;gap:.8rem;flex-wrap:wrap;align-items:center}
-  .install{display:flex;align-items:center;gap:.7rem;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:.7rem .95rem;font-size:.9rem;cursor:pointer;transition:.2s}
+  .install{display:flex;align-items:center;gap:.7rem;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:.7rem .95rem;font-family:inherit;font-size:.9rem;color:var(--text);cursor:pointer;transition:.2s}
   .install:hover{border-color:var(--faint)}.install .pr{color:var(--ok)}.install .cp{color:var(--dim);font-size:.78rem;margin-left:.3rem}
   .btn{background:var(--cyan);color:#04141f;font-weight:600;border-radius:9px;padding:.72rem 1.15rem;border:0;font-family:inherit;font-size:.9rem;cursor:pointer;transition:.2s;box-shadow:0 6px 24px -10px rgba(125,211,252,.6)}
   .btn:hover{background:var(--cyan-d);transform:translateY(-1px)}
@@ -69,7 +69,9 @@
   .cur{display:inline-block;width:8px;height:1.05em;background:var(--cyan);vertical-align:-2px;margin-left:2px;animation:blink 1.05s steps(1) infinite}
   @keyframes blink{50%{opacity:0}}
 
-  section{padding:4.5rem 0;border-top:1px solid var(--line)}
+  section{border-top:1px solid var(--line)}
+  /* section.wrap outranks .wrap (type+class > class) so the vertical padding actually applies */
+  section.wrap{margin-top:1rem;padding:3.25rem 1.5rem 3.25rem}
   .kicker{font-size:.72rem;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);margin-bottom:1rem}
   .pull{font-family:var(--serif);font-size:clamp(1.7rem,3.6vw,2.7rem);line-height:1.22;letter-spacing:-.01em;max-width:24ch}
   .pull .it{font-style:italic;color:var(--cyan)}.pull .am{font-style:italic;color:var(--amber)}
@@ -200,7 +202,7 @@
 
 <section class="wrap">
   <div class="kicker">live</div>
-  <div class="pull" style="font-size:clamp(1.4rem,2.8vw,2rem)">Running in the open. No trackers, no cookies.</div>
+  <div class="pull" style="font-size:clamp(1.4rem,2.8vw,2rem)">Running in the open. No cookies, no fingerprinting.</div>
   <div class="stats" id="stats">
     <div class="stat"><div class="n" data-k="unique_visitors">0</div><div class="l">visitors</div></div>
     <div class="stat"><div class="n" data-k="tunnels_opened">0</div><div class="l">tunnels opened</div></div>
@@ -231,7 +233,7 @@
 </section>
 
 <footer><div class="wrap row">
-  <span class="privacy">&#9679; no third-party trackers &middot; no cookies &middot; the relay holds no state past a session</span>
+  <span class="privacy">&#9679; cookieless &middot; no fingerprinting &middot; the relay holds no state past a session</span>
   <span>
     <a href="https://github.com/mcfearsome/tunnel-solutions">github</a> &nbsp;&middot;&nbsp;
     <a href="https://crates.io/crates/tunnel-locker">crates.io</a> &nbsp;&middot;&nbsp;

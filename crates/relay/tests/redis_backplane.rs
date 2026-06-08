@@ -12,13 +12,24 @@ async fn serve_redis(url: &str) -> u16 {
     let bp = relay::backplane::RedisBackplane::connect(url, 256)
         .await
         .expect("connect to Redis");
-    let app = relay::build_app_with(Arc::new(bp));
-    let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let port = l.local_addr().unwrap().port();
+    // Launch a Rocket relay on the Redis backplane on an ephemeral port; an `on_liftoff` fairing
+    // reports the OS-assigned port (Rocket writes it into config after binding) back.
+    let (tx, rx) = tokio::sync::oneshot::channel::<u16>();
+    let figment = rocket::Config::figment()
+        .merge(("address", "127.0.0.1"))
+        .merge(("port", 0));
+    let rocket = relay::build_rocket_with(Arc::new(bp))
+        .configure(figment)
+        .attach(rocket::fairing::AdHoc::on_liftoff("test port", move |r| {
+            let port = r.config().port;
+            Box::pin(async move {
+                let _ = tx.send(port);
+            })
+        }));
     tokio::spawn(async move {
-        axum::serve(l, app).await.unwrap();
+        let _ = rocket.launch().await;
     });
-    port
+    rx.await.expect("relay should report its bound port")
 }
 
 /// Two in-process relay instances connected to the same Redis.

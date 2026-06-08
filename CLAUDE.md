@@ -14,7 +14,7 @@ a disposable link, sees only the tools/files you allow, and the link dies on TTL
 | `tnls-demo` | `tnls-demo` (`plugins/demo`) | Sample rmcp MCP server plugin (read + shell). |
 | `tnls-rendezvous` | `tnls-rendezvous` (`plugins/rendezvous`) | File sending over BitTorrent plugin. |
 
-The README now documents `tnls`. For architecture details trust the crates + `docs/superpowers/`.
+The README documents `tnls`. For architecture details trust the crates + `docs/superpowers/`. Recent work: `tnls-rendezvous` (BitTorrent + peer rendezvous — built & tested); don't assume the README is fully current.
 
 ## Commands
 
@@ -46,7 +46,7 @@ crates/
   tnls/                The host binary (bin: tnls): open/close/plugins + dispatches to tnls-<name> plugins via describe manifest.
   plugins/demo/        bin: tnls-demo — sample rmcp MCP server (read + shell). Subcommands: serve | describe.
   plugins/rendezvous/  bin: tnls-rendezvous — file sending over BitTorrent. Subcommands: share | get | seed | fetch | describe.
-  relay/               Axum WS pairing service (bin: relay). In-memory, no state past session. The only deployed component.
+  relay/               Rocket WS pairing service (bin: relay). In-memory, no state past session. The only deployed component.
 viewer/                Static HTML (index/landing/stats), no build step — include_str!'d into the relay binary.
 docs/superpowers/      Design specs + phased implementation plans (see Design docs below).
 ```
@@ -68,9 +68,10 @@ docs/superpowers/      Design specs + phased implementation plans (see Design do
 
 - **README now documents `tnls`** — the primary binary is `tnls` (crate `tnls`); the agent library is `tnls-tunnel`. Trust the crates + `docs/superpowers/` for full detail.
 - **`librqbit` is pinned to `=9.0.0-rc.0`** (`crates/plugins/rendezvous/Cargo.toml`) — only a pre-release exists, so caret `9` won't resolve. Don't loosen without checking crates.io.
-- **The relay is single-instance / in-memory** — viewer and agent must hit the *same* process (registry is a local HashMap). `fly.toml` pins 1 machine; don't scale horizontally. The Redis backplane that would allow it is designed but **not implemented** (`docs/superpowers/specs/2026-06-07-redis-relay-design.md`).
+- **The relay defaults to in-memory single-instance** — by default the registry is a local HashMap (`LocalBackplane`), so viewer and agent must hit the *same* process, and `fly.toml` pins 1 machine. A **`RedisBackplane` is implemented** (`crates/relay/src/backplane.rs`) for multi-instance pairing via Redis pub/sub — set `REDIS_URL` to enable it.
 - **`tnls-rendezvous share` is the self-seeding rmcp server the host spawns** — it seeds the file and serves a `ShareServer` over stdio; don't run it by hand (the host passes `TNLS_RELAY` to it).
 - **Editing `viewer/*.html` needs a relay rebuild** — the HTML is `include_str!`'d into the binary at compile time.
+- **CI is live** (GitHub Actions: fmt check, clippy, test matrix, audit, Fly deploy). No repo fmt/clippy config (defaults apply), but run `cargo fmt --all` / `cargo clippy --workspace` / `cargo test --workspace` locally before pushing — the **fmt check will fail CI** otherwise.
 
 ## Deploy
 
@@ -82,5 +83,8 @@ plain `ws` internally and binds `$PORT` (8080 on Fly). Aggregate stats persist t
 ## Design docs
 
 `docs/superpowers/specs/` (designs, each with a **Status** header) and `.../plans/` (phased
-plans). Current trajectory: `tnls` Phase 2 (magnet-through-tunnel) is done and e2e-tested;
-Phase 2.5 (peer **rendezvous**) and the **Redis relay** backplane are approved but not yet built.
+plans). Current state: `tnls` Phases 1–2 (BitTorrent core + magnet-through-tunnel) and Phase 2.5
+(peer **rendezvous** — the seeder advertises its address through the tunnel so transfers connect
+directly instead of waiting on DHT) are **built and tested**. The **Redis relay** backplane is
+**implemented and cross-instance-tested** (`crates/relay/src/backplane.rs`,
+`crates/relay/tests/redis_backplane.rs`), and the relay now runs on **Rocket** (rewritten from Axum).

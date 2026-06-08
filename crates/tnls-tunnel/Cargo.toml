@@ -24,4 +24,4 @@ humantime = "2"
 
 [dev-dependencies]
 relay = { path = "../relay" }
-axum = { version = "0.7", features = ["ws"] }
+rocket = "0.5.1"

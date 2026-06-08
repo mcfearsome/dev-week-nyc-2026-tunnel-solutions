@@ -158,7 +158,18 @@ impl RedisBackplane {
     /// Connect to Redis and spawn the subscriber + heartbeat tasks.
     pub async fn connect(url: &str, max: usize) -> anyhow::Result<Self> {
         let client = Client::open(url)?;
-        let cmd = client.get_connection_manager().await?;
+        // Bounded: a bad URL / TLS mismatch / unreachable Redis must FAIL LOUDLY here, not hang
+        // forever (a hang silently takes the relay down). main.rs falls back to Local on Err.
+        let cmd = tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            client.get_connection_manager(),
+        )
+        .await
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "redis connect timed out after 10s — check REDIS_URL scheme (use rediss:// for TLS), reachability, and credentials"
+            )
+        })??;
 
         // Generate a random instance ID.
         let mut raw = [0u8; 8];
@@ -170,7 +181,12 @@ impl RedisBackplane {
 
         // Subscriber task: PSUBSCRIBE tunnel:* and route incoming messages.
         {
-            let mut pubsub = client.get_async_pubsub().await?;
+            let mut pubsub = tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                client.get_async_pubsub(),
+            )
+            .await
+            .map_err(|_| anyhow::anyhow!("redis pubsub connect timed out after 10s"))??;
             pubsub.psubscribe("tunnel:*").await?;
             let dispatch_sub = dispatch.clone();
             tokio::spawn(async move {
