@@ -1,19 +1,9 @@
 use std::time::Duration;
 
-fn build(pkg: &str) {
-    let st = std::process::Command::new(env!("CARGO"))
-        .args(["build", "-p", pkg])
-        .status()
-        .unwrap();
-    assert!(st.success(), "building {pkg} failed");
-}
-
 fn rendezvous_bin() -> String {
-    // CARGO_MANIFEST_DIR is crates/plugins/rendezvous; target is at workspace root
-    format!(
-        "{}/../../../../target/debug/tnls-rendezvous",
-        env!("CARGO_MANIFEST_DIR")
-    )
+    // Cargo injects the exact built-binary path for THIS crate's integration tests and
+    // guarantees the bin is built before the test runs — more robust than counting `../`.
+    env!("CARGO_BIN_EXE_tnls-rendezvous").to_string()
 }
 
 async fn read_link(relay_port: u16) -> String {
@@ -39,9 +29,8 @@ async fn read_link(relay_port: u16) -> String {
 
 #[tokio::test]
 async fn get_transfers_the_file_through_the_tunnel() {
-    // Build the rendezvous binary explicitly before spawning it.
-    build("tnls-rendezvous");
-
+    // Cargo builds tnls-rendezvous before this integration test runs; the path comes
+    // from CARGO_BIN_EXE_tnls-rendezvous (see rendezvous_bin).
     let bin = rendezvous_bin();
 
     // local relay
