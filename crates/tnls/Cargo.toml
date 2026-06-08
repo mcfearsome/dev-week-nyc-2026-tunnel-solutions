@@ -4,21 +4,3 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-librqbit = "=9.0.0-rc.0"   # only a pre-release exists; caret "9" won't resolve it
-tokio = { workspace = true }
-anyhow = { workspace = true }
-clap = { version = "4", features = ["derive"] }
-urlencoding = "2"
-bytes = "1"
-tnls-tunnel = { path = "../tnls-tunnel" }
-tnls-core = { path = "../tnls-core" }
-tokio-tungstenite = { version = "0.23", features = ["rustls-tls-webpki-roots"] }
-futures-util = { workspace = true }
-serde_json = { workspace = true }
-local-ip-address = "0.6"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
-
-[dev-dependencies]
-relay = { path = "../relay" }
-axum = { version = "0.7", features = ["ws"] }
-tokio-tungstenite = { version = "0.23" }

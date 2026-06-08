@@ -1,4 +1,1 @@
-pub mod bittorrent;
-pub mod get;
-pub mod mcp_serve;
-pub mod share;
+// host crate — see Chunk 5

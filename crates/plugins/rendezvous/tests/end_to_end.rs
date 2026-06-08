@@ -7,6 +7,15 @@ fn build(pkg: &str) {
         .unwrap();
     assert!(st.success(), "building {pkg} failed");
 }
+
+fn rendezvous_bin() -> String {
+    // CARGO_MANIFEST_DIR is crates/plugins/rendezvous; target is at workspace root
+    format!(
+        "{}/../../../../target/debug/tnls-rendezvous",
+        env!("CARGO_MANIFEST_DIR")
+    )
+}
+
 async fn read_link(relay_port: u16) -> String {
     let path = std::env::temp_dir().join("tunnel-latest.pid");
     // Remove any stale pidfile from a previous run so we don't pick up the wrong link.
@@ -30,7 +39,10 @@ async fn read_link(relay_port: u16) -> String {
 
 #[tokio::test]
 async fn get_transfers_the_file_through_the_tunnel() {
-    build("tnls"); // the agent spawns target/debug/tnls mcp-serve
+    // Build the rendezvous binary explicitly before spawning it.
+    build("tnls-rendezvous");
+
+    let bin = rendezvous_bin();
 
     // local relay
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -41,61 +53,51 @@ async fn get_transfers_the_file_through_the_tunnel() {
     let relay_url = format!("ws://127.0.0.1:{port}");
 
     // a temp file to "share"
-    let dir = std::env::temp_dir().join(format!("tnls-e2e-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("tnls-rdv-e2e-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("doc.bin");
     std::fs::write(&file, b"phase two end to end").unwrap();
 
-    // run share in-process (it blocks; spawn it). It seeds + opens the tunnel.
-    let tnls_bin = format!("{}/../../target/debug/tnls", env!("CARGO_MANIFEST_DIR"));
-    let share = tnls::share::ShareArgs {
-        path: file.to_string_lossy().into_owned(),
-        relay: relay_url,
-        ttl: Duration::from_secs(120),
-        mcp_exe: Some(tnls_bin),
-    };
+    // Open the tunnel by driving session::open directly (the host owns the tunnel;
+    // the rendezvous share subcommand just seeds + serves over stdio).
+    let bin_clone = bin.clone();
+    let relay_url_clone = relay_url.clone();
+    let file_str = file.to_string_lossy().into_owned();
     tokio::spawn(async move {
-        let _ = tnls::share::run_share(share).await;
+        let _ = tnls_tunnel::session::open(tnls_tunnel::session::OpenArgs {
+            server: bin_clone,
+            server_args: vec!["share".to_string(), file_str],
+            ttl: Duration::from_secs(120),
+            scope: vec!["list_shares".to_string(), "request_file".to_string()],
+            relay: relay_url_clone.clone(),
+            env: vec![("TNLS_RELAY".to_string(), relay_url_clone)],
+        })
+        .await;
     });
 
-    // get the link share published, then retrieve the magnet + peers through the tunnel
+    // Wait for the link that share publishes via the pidfile.
     let link = read_link(port).await;
-    let rf = tokio::time::timeout(Duration::from_secs(20), tnls::get::retrieve_magnet(&link))
-        .await
-        .expect("retrieve timed out")
-        .expect("retrieve failed");
     assert!(
-        rf.magnet.starts_with("magnet:?xt=urn:btih:"),
-        "got {}",
-        rf.magnet
-    );
-    assert!(
-        rf.peers.iter().any(|p| p.ip().is_loopback()),
-        "must advertise a loopback peer: {:?}",
-        rf.peers
+        link.contains("/t/") && link.contains('#'),
+        "bad link: {link}"
     );
 
-    // download via the advertised loopback peer → completes directly (no DHT).
-    // The getter uses initial_peers=[127.0.0.1:P] + disable_dht=true, making this
-    // hermetic: bytes flow entirely over loopback, no network/tracker needed.
+    // Spawn tnls-rendezvous get <link> --out <out_dir> as a subprocess.
     let out = dir.join("dl");
     std::fs::create_dir_all(&out).unwrap();
-    let dl = tnls::bittorrent::fetch(
-        &rf.magnet,
-        &out,
-        tnls::bittorrent::NetOpts {
-            disable_dht: true,
-            listen_port: None,
-            enable_upnp: false,
-            initial_peers: rf.peers,
-        },
+    let status = tokio::time::timeout(
+        Duration::from_secs(60),
+        tokio::process::Command::new(&bin)
+            .args(["get", &link, "--out", out.to_str().unwrap()])
+            .status(),
     )
     .await
-    .unwrap();
-    tokio::time::timeout(Duration::from_secs(40), dl.wait())
-        .await
-        .expect("download timed out")
-        .expect("download errored");
+    .expect("get subprocess timed out")
+    .expect("get subprocess failed to spawn");
+
+    assert!(status.success(), "tnls-rendezvous get exited with {status}");
+
+    // Assert the transferred bytes equal the source.
     let got = std::fs::read(out.join("doc.bin")).unwrap();
     assert_eq!(
         got, b"phase two end to end",

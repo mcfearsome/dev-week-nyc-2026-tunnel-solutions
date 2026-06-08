@@ -8,6 +8,7 @@ use tokio_tungstenite::tungstenite::Message;
 pub struct RetrievedFile {
     pub magnet: String,
     pub peers: Vec<SocketAddr>,
+    #[allow(dead_code)] // available for future consumers (e.g. display the filename)
     pub name: Option<String>,
 }
 

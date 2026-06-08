@@ -3387,23 +3387,6 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 [[package]]
 name = "tnls"
 version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum 0.7.9",
- "bytes",
- "clap",
- "futures-util",
- "librqbit",
- "local-ip-address",
- "relay",
- "reqwest",
- "serde_json",
- "tnls-core",
- "tnls-tunnel",
- "tokio",
- "tokio-tungstenite 0.23.1",
- "urlencoding",
-]
 
 [[package]]
 name = "tnls-core"
@@ -3438,6 +3421,32 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "tnls-rendezvous"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum 0.7.9",
+ "bytes",
+ "clap",
+ "futures-util",
+ "librqbit",
+ "local-ip-address",
+ "relay",
+ "reqwest",
+ "rmcp",
+ "rustls",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "tnls-core",
+ "tnls-plugin",
+ "tnls-tunnel",
+ "tokio",
+ "tokio-tungstenite 0.23.1",
+ "urlencoding",
 ]
 
 [[package]]
