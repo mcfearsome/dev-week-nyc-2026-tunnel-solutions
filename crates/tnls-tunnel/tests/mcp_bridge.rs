@@ -2,16 +2,19 @@ use serde_json::json;
 
 fn mcp_demo_bin() -> String {
     let status = std::process::Command::new(env!("CARGO"))
-        .args(["build", "-p", "mcp-demo"])
+        .args(["build", "-p", "tnls-demo"])
         .status()
-        .expect("cargo build -p mcp-demo");
-    assert!(status.success(), "building mcp-demo failed");
-    format!("{}/../../target/debug/mcp-demo", env!("CARGO_MANIFEST_DIR"))
+        .expect("cargo build -p tnls-demo");
+    assert!(status.success(), "building tnls-demo failed");
+    format!(
+        "{}/../../target/debug/tnls-demo",
+        env!("CARGO_MANIFEST_DIR")
+    )
 }
 
 #[tokio::test]
 async fn handshake_lists_tools_and_calls_shell() {
-    let mut child = tnls_tunnel::mcp::McpChild::spawn(&mcp_demo_bin(), &[], &[])
+    let mut child = tnls_tunnel::mcp::McpChild::spawn(&mcp_demo_bin(), &["serve".to_string()], &[])
         .await
         .unwrap();
 

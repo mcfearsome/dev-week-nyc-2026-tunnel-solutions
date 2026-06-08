@@ -27,7 +27,12 @@ pub struct Tunnel {
 
 impl Manifest {
     pub fn new(name: &str, about: &str, commands: Vec<Command>) -> Self {
-        Self { schema: 1, name: name.into(), about: about.into(), commands }
+        Self {
+            schema: 1,
+            name: name.into(),
+            about: about.into(),
+            commands,
+        }
     }
     pub fn command(&self, name: &str) -> Option<&Command> {
         self.commands.iter().find(|c| c.name == name)
@@ -43,11 +48,18 @@ impl Command {
         Self {
             name: name.into(),
             about: about.into(),
-            tunnel: Some(Tunnel { scope: scope.iter().map(|s| s.to_string()).collect(), default_ttl: default_ttl.into() }),
+            tunnel: Some(Tunnel {
+                scope: scope.iter().map(|s| s.to_string()).collect(),
+                default_ttl: default_ttl.into(),
+            }),
         }
     }
     pub fn plain(name: &str, about: &str) -> Self {
-        Self { name: name.into(), about: about.into(), tunnel: None }
+        Self {
+            name: name.into(),
+            about: about.into(),
+            tunnel: None,
+        }
     }
 }
 
@@ -61,15 +73,34 @@ mod tests {
             "rendezvous",
             "Capability-scoped file sending over BitTorrent.",
             vec![
-                Command::tunneled("share", "Seed + serve a file.", &["list_shares", "request_file"], "30m"),
+                Command::tunneled(
+                    "share",
+                    "Seed + serve a file.",
+                    &["list_shares", "request_file"],
+                    "30m",
+                ),
                 Command::plain("get", "Fetch a shared file."),
             ],
         );
         let json = m.to_json();
         let back: Manifest = serde_json::from_str(&json).unwrap();
         assert_eq!(back.schema, 1);
-        assert_eq!(back.command("share").unwrap().tunnel.as_ref().unwrap().scope, vec!["list_shares", "request_file"]);
-        assert!(back.command("get").unwrap().tunnel.is_none(), "plain command has no tunnel");
-        assert!(json.contains(r#""tunnel":null"#), "plain command serializes tunnel:null");
+        assert_eq!(
+            back.command("share")
+                .unwrap()
+                .tunnel
+                .as_ref()
+                .unwrap()
+                .scope,
+            vec!["list_shares", "request_file"]
+        );
+        assert!(
+            back.command("get").unwrap().tunnel.is_none(),
+            "plain command has no tunnel"
+        );
+        assert!(
+            json.contains(r#""tunnel":null"#),
+            "plain command serializes tunnel:null"
+        );
     }
 }
