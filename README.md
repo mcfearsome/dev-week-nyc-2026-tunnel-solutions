@@ -2,7 +2,7 @@
 
 An **ephemeral, capability-scoped tunnel for a locally-running MCP server.** A teammate opens
 a link to your running agent, sees only the tools you allow, and the link evaporates on TTL
-or `tunnel close`.
+or `tnls close`.
 
 ## Why this isn't ngrok
 
@@ -32,9 +32,8 @@ extend a TTL; it only moves bytes.
 # 1. start the relay
 cargo run -p relay
 
-# 2. open a 2-minute, read-only tunnel to the sample MCP server (in another terminal)
-cargo build -p mcp-demo
-cargo run -p tunnel-locker -- open ./target/debug/mcp-demo --ttl 2m --scope read
+# 2. open a 2-minute, read-only tunnel to the sample MCP server (plugin)
+cargo run -p tnls -- --ttl 2m --scope read demo serve
 #   → prints a link like http://127.0.0.1:8787/t/<id>#<token>
 
 # 3. open the link as a "teammate" in a browser:
@@ -42,7 +41,7 @@ cargo run -p tunnel-locker -- open ./target/debug/mcp-demo --ttl 2m --scope read
 #      - raw-call `shell` {"cmd":"echo hi"}   → refused, out of scope
 #
 # 4. let the 2-minute TTL lapse → the link goes dead live,
-#    or run `cargo run -p tunnel-locker -- close` from a third terminal to revoke on demand.
+#    or run `cargo run -p tnls -- close` from a third terminal to revoke on demand.
 ```
 
 Or just: `./demo.sh` (boots the relay and opens the tunnel; Ctrl-C tears down).
@@ -59,11 +58,13 @@ HTTP request line to the relay.
 
 | Crate | Role |
 |-------|------|
-| `tunnel-locker-core` | Pure core: token, scope filter, per-call decision, TTL parse, frames. |
+| `tnls-core` | Pure core: token, scope filter, per-call decision, TTL parse, frames. |
+| `tnls-tunnel` | The tunnel **agent** library: `session::open` (secret, scope, TTL), `McpChild` (rmcp client). |
+| `tnls-plugin` | The `describe` manifest contract shared by host + plugins. |
+| `tnls` | The host binary: `open`/`close`/`plugins` + plugin dispatch. |
+| `plugins/demo` | `tnls-demo`: sample rmcp MCP server (read + shell). |
+| `plugins/rendezvous` | `tnls-rendezvous`: file sending over BitTorrent. |
 | `relay` | Axum WS pairing service (binary: `relay`). |
-| `tunnel-locker` | The CLI (binary: `tunnel`): spawns the MCP child, enforces scope + TTL. |
-| `mcp-demo` | Sample MCP server exposing `read` + `shell` (binary: `mcp-demo`). |
-| `viewer/index.html` | Static viewer, no build step. |
 
 ## Tests
 
@@ -71,9 +72,9 @@ HTTP request line to the relay.
 cargo test --workspace
 ```
 
-The correctness core (`tunnel-locker-core`) is unit-tested exhaustively; `relay` has an in-process WS
-pairing test; `tunnel-locker` has a real-socket end-to-end test proving `read` succeeds and `shell` is
-refused.
+The correctness core (`tnls-core`) is unit-tested exhaustively; `relay` has an in-process WS
+pairing test; `tnls-tunnel` has a real-socket end-to-end test proving `read` succeeds and `shell` is
+refused (MCP is now `rmcp` on both stdio ends). File-sharing transfer is tested in `tnls-rendezvous`.
 
 ## Non-goals & future work
 

@@ -4,16 +4,17 @@ Rust workspace for **ephemeral, capability-scoped tunnels to a local MCP server*
 layered on top, **capability-scoped file sending over BitTorrent** (`tnls`). A teammate opens
 a disposable link, sees only the tools/files you allow, and the link dies on TTL or close.
 
-## Two product surfaces (read this first)
+## One host + plugins (read this first)
 
-The README documents only `tunnel-locker`. There are **two** CLIs:
+`tnls` is the host binary. It owns `open`/`close`/`plugins` and dispatches to `tnls-<name>` plugin binaries via the `describe` manifest. The `tunnel` binary is retired.
 
-| Binary | Crate | What it is | Status |
-|--------|-------|-----------|--------|
-| `tunnel` | `tunnel-locker` | Original: scoped tunnel to a local MCP server (filters `tools/list`, refuses out-of-scope `tools/call`, enforces TTL). | Stable |
-| `tnls`   | `tnls`          | Newer: seed a file over BitTorrent + hand out the magnet through a scoped tunnel. Built **on top of** `tunnel-locker`. | Active dev |
+| Binary | Crate | What it is |
+|--------|-------|-----------|
+| `tnls` | `tnls` | Host: `open`/`close`/`plugins` + plugin dispatch via `describe`. |
+| `tnls-demo` | `tnls-demo` (`plugins/demo`) | Sample rmcp MCP server plugin (read + shell). |
+| `tnls-rendezvous` | `tnls-rendezvous` (`plugins/rendezvous`) | File sending over BitTorrent plugin. |
 
-Current work happens in `tnls` (BitTorrent + peer rendezvous). Don't assume the README is current.
+The README now documents `tnls`. For architecture details trust the crates + `docs/superpowers/`.
 
 ## Commands
 
@@ -21,28 +22,31 @@ Current work happens in `tnls` (BitTorrent + peer rendezvous). Don't assume the 
 |---------|-------------|
 | `cargo build --workspace` | Build everything |
 | `cargo test --workspace` | All tests (core unit tests + relay pairing + real-socket e2e) |
-| `cargo fmt` / `cargo clippy --workspace` | Format / lint — no repo config, defaults apply, no CI runs these for you |
+| `cargo fmt` / `cargo clippy --workspace` | Format / lint — CI runs these; `.github/workflows/ci.yml` |
 | `cargo run -p relay` | Run the relay locally (binds `127.0.0.1:8787`, or `$PORT`) |
-| `./demo.sh` | Boot relay + open a 2-min read-only tunnel to `mcp-demo` (Ctrl-C tears down) |
-| `cargo run -p tunnel-locker -- open <srv> --ttl 2m --scope read` | Open a tunnel (foreground) |
-| `cargo run -p tunnel-locker -- close [--tunnel-id ID]` | Revoke (SIGTERM; defaults to most recent via $TMPDIR pidfile) |
-| `cargo run -p tnls -- share <file> --ttl 30m` | Seed + share a file over a scoped tunnel |
-| `cargo run -p tnls -- get <link> --out <dir>` | Fetch a shared file from a tunnel link |
+| `./demo.sh` | Boot relay + open a 2-min read-only tunnel via demo plugin (Ctrl-C tears down) |
+| `cargo run -p tnls -- open <srv> --ttl 2m --scope read` | Open a tunnel to any MCP server (foreground) |
+| `cargo run -p tnls -- close [--tunnel-id ID]` | Revoke (SIGTERM; defaults to most recent via $TMPDIR pidfile) |
+| `cargo run -p tnls -- demo serve` | Open a tunnel to the demo plugin (read + shell) |
+| `cargo run -p tnls -- rendezvous share <file>` | Seed + share a file over a scoped tunnel |
+| `cargo run -p tnls -- rendezvous get <link> --out <dir>` | Fetch a shared file from a tunnel link |
 
 ## Architecture
 
 ```
-viewer ──ws──> relay <──ws── agent ──stdio──> local MCP server
- (browser /     (pairs by    (holds secret;    (real MCP JSON-RPC;
-  tnls get)      tunnel_id,   enforces scope    mcp-demo, or the hidden
-                 opaque bytes) + TTL, filters)   `tnls mcp-serve`)
+viewer ──ws──> relay <──ws── agent ──stdio──> tnls-<name> plugin
+ (browser /     (pairs by    (holds secret;    (rmcp server over stdio;
+  tnls-rendezvous) tunnel_id,  enforces scope    tnls-demo, or
+                 opaque bytes) + TTL, filters)   tnls-rendezvous share)
 
 crates/
-  tunnel-locker-core/  Pure logic: HMAC token, scope filter, per-call decision, TTL parse, frames. No I/O; exhaustively unit-tested.
+  tnls-core/           Pure logic: HMAC token, scope filter, per-call decision, TTL parse, frames. No I/O; exhaustively unit-tested.
+  tnls-tunnel/         The tunnel agent library: session::open (secret, scope, TTL), McpChild (rmcp client over TokioChildProcess).
+  tnls-plugin/         The `describe` manifest contract shared by host + plugins.
+  tnls/                The host binary (bin: tnls): open/close/plugins + dispatches to tnls-<name> plugins via describe manifest.
+  plugins/demo/        bin: tnls-demo — sample rmcp MCP server (read + shell). Subcommands: serve | describe.
+  plugins/rendezvous/  bin: tnls-rendezvous — file sending over BitTorrent. Subcommands: share | get | seed | fetch | describe.
   relay/               Axum WS pairing service (bin: relay). In-memory, no state past session. The only deployed component.
-  tunnel-locker/       The `tunnel` CLI (bin: tunnel): spawns MCP child over stdio, bridges to relay, enforces scope + TTL.
-  tnls/                The `tnls` CLI: BitTorrent (librqbit) file sharing over a tunnel. Subcommands: seed/fetch/share/get/mcp-serve.
-  mcp-demo/            Sample MCP server (bin: mcp-demo) exposing `read` + `shell`. Used by demo.sh and e2e tests.
 viewer/                Static HTML (index/landing/stats), no build step — include_str!'d into the relay binary.
 docs/superpowers/      Design specs + phased implementation plans (see Design docs below).
 ```
@@ -62,12 +66,11 @@ docs/superpowers/      Design specs + phased implementation plans (see Design do
 
 ## Gotchas
 
-- **README is behind the code** — it covers `tunnel-locker` only and omits `tnls`. Trust the crates + `docs/superpowers/`.
-- **`librqbit` is pinned to `=9.0.0-rc.0`** (`crates/tnls/Cargo.toml`) — only a pre-release exists, so caret `9` won't resolve. Don't loosen without checking crates.io.
+- **README now documents `tnls`** — the primary binary is `tnls` (crate `tnls`); the agent library is `tnls-tunnel`. Trust the crates + `docs/superpowers/` for full detail.
+- **`librqbit` is pinned to `=9.0.0-rc.0`** (`crates/plugins/rendezvous/Cargo.toml`) — only a pre-release exists, so caret `9` won't resolve. Don't loosen without checking crates.io.
 - **The relay is single-instance / in-memory** — viewer and agent must hit the *same* process (registry is a local HashMap). `fly.toml` pins 1 machine; don't scale horizontally. The Redis backplane that would allow it is designed but **not implemented** (`docs/superpowers/specs/2026-06-07-redis-relay-design.md`).
-- **`tnls mcp-serve` is internal** (hidden subcommand) — the tunnel spawns it during `tnls share`; never run it by hand.
+- **`tnls-rendezvous share` is the self-seeding rmcp server the host spawns** — it seeds the file and serves a `ShareServer` over stdio; don't run it by hand (the host passes `TNLS_RELAY` to it).
 - **Editing `viewer/*.html` needs a relay rebuild** — the HTML is `include_str!`'d into the binary at compile time.
-- **No CI, no fmt/clippy config.** Run `cargo fmt` / `cargo clippy --workspace` / `cargo test --workspace` yourself before calling work done.
 
 ## Deploy
 
