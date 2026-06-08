@@ -10,7 +10,8 @@ serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true
 futures-util.workspace = true
-axum = { version = "0.7", features = ["ws"] }
+rocket = { version = "0.5.1", features = ["json"] }
+rocket_ws = "0.1.1"
 getrandom = "0.2"
 async-trait = "0.1"
 bytes = "1"

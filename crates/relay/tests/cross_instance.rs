@@ -4,13 +4,24 @@ use std::time::Duration;
 use tokio_tungstenite::tungstenite::Message as TMsg;
 
 async fn serve(backplane: Arc<relay::backplane::LocalBackplane>) -> u16 {
-    let app = relay::build_app_with(backplane);
-    let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let port = l.local_addr().unwrap().port();
+    // Launch a Rocket relay sharing the injected backplane on an ephemeral port; an `on_liftoff`
+    // fairing reports the OS-assigned port (Rocket writes it into config after binding) back.
+    let (tx, rx) = tokio::sync::oneshot::channel::<u16>();
+    let figment = rocket::Config::figment()
+        .merge(("address", "127.0.0.1"))
+        .merge(("port", 0));
+    let rocket = relay::build_rocket_with(backplane)
+        .configure(figment)
+        .attach(rocket::fairing::AdHoc::on_liftoff("test port", move |r| {
+            let port = r.config().port;
+            Box::pin(async move {
+                let _ = tx.send(port);
+            })
+        }));
     tokio::spawn(async move {
-        axum::serve(l, app).await.unwrap();
+        let _ = rocket.launch().await;
     });
-    port
+    rx.await.expect("relay should report its bound port")
 }
 
 #[tokio::test]
