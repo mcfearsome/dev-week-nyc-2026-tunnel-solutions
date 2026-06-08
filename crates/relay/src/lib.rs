@@ -67,6 +67,13 @@ fn landing_page(ip: ClientIp, st: &State<AppState>) -> RawHtml<&'static str> {
     RawHtml(include_str!("../../../viewer/landing.html"))
 }
 
+#[get("/rendezvous")]
+fn rendezvous_page(ip: ClientIp, st: &State<AppState>) -> RawHtml<&'static str> {
+    st.stats.page_view(&ip.0);
+    // The `rendezvous` plugin's landing page; embedded at compile time like the others.
+    RawHtml(include_str!("../../../viewer/rendezvous.html"))
+}
+
 #[get("/healthz")]
 fn healthz() -> &'static str {
     "ok"
@@ -171,6 +178,7 @@ pub fn configure(rocket: Rocket<Build>, backplane: Arc<dyn Backplane>) -> Rocket
             "/",
             routes![
                 landing_page,
+                rendezvous_page,
                 healthz,
                 whoami,
                 stats_page,

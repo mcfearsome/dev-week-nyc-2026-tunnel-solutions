@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rendezvous — peer-to-peer file transfer over a capability-scoped tunnel</title>
+<meta name="description" content="rendezvous is the first tnls plugin: send a big file over BitTorrent through a scoped, expiring tunnel. The bytes move peer-to-peer and never touch the relay — the tunnel only authorizes which file, and for how long.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a0c12'/%3E%3Cpath d='M9 11l5 5-5 5' stroke='%237dd3fc' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Crect x='16.5' y='19' width='7' height='2.5' rx='1.2' fill='%237dd3fc'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0c12; --bg2:#0c0f17; --panel:#11141d; --panel2:#141826;
+    --line:#1d2231; --faint:#2b3242;
+    --text:#dde1ea; --mut:#8b93a7; --dim:#5b6376;
+    --cyan:#7dd3fc; --cyan-d:#38bdf8; --amber:#fcd34d; --ok:#4ade80; --bad:#fb7185;
+    --serif:"Instrument Serif",Georgia,serif;
+    --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:var(--mono);background:var(--bg);color:var(--text);font-size:15px;line-height:1.65;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  body::before{content:"";position:fixed;inset:0;z-index:-2;pointer-events:none;
+    background:radial-gradient(1100px 600px at 78% -8%, rgba(125,211,252,.10), transparent 60%),
+      radial-gradient(900px 700px at 8% 12%, rgba(252,211,77,.045), transparent 55%),
+      linear-gradient(var(--bg2),var(--bg))}
+  body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.5;
+    background-image:linear-gradient(rgba(125,211,252,.030) 1px,transparent 1px),linear-gradient(90deg,rgba(125,211,252,.030) 1px,transparent 1px);
+    background-size:46px 46px;-webkit-mask-image:radial-gradient(circle at 50% 30%,#000 0%,transparent 75%);mask-image:radial-gradient(circle at 50% 30%,#000 0%,transparent 75%)}
+  .grain{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.045;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 1.5rem}
+  .accent{color:var(--cyan)} .ok{color:var(--ok)} .bad{color:var(--bad)} .amber{color:var(--amber)} .mut{color:var(--mut)}
+
+  nav{position:sticky;top:0;z-index:20;backdrop-filter:blur(10px);background:linear-gradient(var(--bg),rgba(10,12,18,.6));border-bottom:1px solid var(--line)}
+  nav .row{display:flex;align-items:center;gap:1rem;height:60px}
+  .brand{font-weight:600;letter-spacing:-.01em}.brand b{color:var(--cyan)}
+  .brand .slash{color:var(--dim);font-weight:400;margin-left:.5rem}.brand .slash b{color:var(--mut);font-weight:500}
+  nav .links{margin-left:auto;display:flex;gap:1.4rem;align-items:center;font-size:.85rem}
+  nav .links a{color:var(--mut);transition:color .2s}nav .links a:hover{color:var(--text)}
+  .ghost{border:1px solid var(--faint);border-radius:7px;padding:.42rem .8rem;color:var(--text)!important;transition:.2s}
+  .ghost:hover{border-color:var(--cyan);box-shadow:0 0 0 1px rgba(125,211,252,.3)}
+
+  .hero{display:grid;grid-template-columns:1.04fr 1fr;gap:3rem;align-items:center;padding:5.5rem 0 4rem}
+  .eyebrow{display:inline-flex;align-items:center;gap:.5rem;font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;color:var(--cyan);border:1px solid var(--line);border-radius:100px;padding:.35rem .8rem;margin-bottom:1.5rem;background:var(--panel)}
+  .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok);animation:pulse 2.4s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  h1{font-family:var(--serif);font-weight:400;font-size:clamp(2.7rem,5.6vw,4.3rem);line-height:1.02;letter-spacing:-.01em;margin-bottom:1.1rem}
+  h1 .em{font-style:italic;color:var(--cyan)}
+  h1 .mono{font-family:var(--mono);font-size:.4em;font-weight:500;letter-spacing:-.01em;color:var(--mut);display:block;margin-top:.7rem;line-height:1.5}
+  .lede{color:var(--mut);font-size:1.02rem;max-width:46ch;margin-bottom:2rem}.lede b{color:var(--text);font-weight:500}
+  .cta{display:flex;gap:.8rem;flex-wrap:wrap;align-items:center}
+  .install{display:flex;align-items:center;gap:.7rem;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:.7rem .95rem;font-family:inherit;font-size:.9rem;color:var(--text);cursor:pointer;transition:.2s}
+  .install:hover{border-color:var(--faint)}.install .pr{color:var(--ok)}.install .cp{color:var(--dim);font-size:.78rem;margin-left:.3rem}
+  .btn{background:var(--cyan);color:#04141f;font-weight:600;border-radius:9px;padding:.72rem 1.15rem;border:0;font-family:inherit;font-size:.9rem;cursor:pointer;transition:.2s;box-shadow:0 6px 24px -10px rgba(125,211,252,.6)}
+  .btn:hover{background:var(--cyan-d);transform:translateY(-1px)}
+
+  .term{background:linear-gradient(180deg,#0d111b,#0a0d15);border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 40px 90px -50px rgba(0,0,0,.9),0 0 0 1px rgba(125,211,252,.04),inset 0 1px 0 rgba(255,255,255,.03)}
+  .term .bar{display:flex;align-items:center;gap:.5rem;padding:.7rem .9rem;border-bottom:1px solid var(--line);background:rgba(255,255,255,.015)}
+  .term .bar i{width:11px;height:11px;border-radius:50%;display:block}
+  .term .bar i:nth-child(1){background:#ff5f57}.term .bar i:nth-child(2){background:#febc2e}.term .bar i:nth-child(3){background:#28c840}
+  .term .bar span{margin-left:.6rem;color:var(--dim);font-size:.74rem}
+  .term .body{padding:1.1rem 1.15rem 1.3rem;font-size:.82rem;line-height:1.75;min-height:360px}
+  .ln{white-space:pre-wrap;opacity:0;animation:rise .5s cubic-bezier(.2,.7,.2,1) forwards;animation-delay:calc(var(--i,0)*.1s + .25s)}
+  @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .cmd{color:var(--text)}.cmd .pr{color:var(--ok)}.cmd .fl{color:var(--cyan)}
+  .cur{display:inline-block;width:8px;height:1.05em;background:var(--cyan);vertical-align:-2px;margin-left:2px;animation:blink 1.05s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+  .bar2{color:var(--cyan)}
+
+  section{border-top:1px solid var(--line)}
+  section.wrap{margin-top:1rem;padding:3.25rem 1.5rem 3.25rem}
+  .kicker{font-size:.72rem;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);margin-bottom:1rem}
+  .pull{font-family:var(--serif);font-size:clamp(1.7rem,3.6vw,2.7rem);line-height:1.22;letter-spacing:-.01em;max-width:24ch}
+  .pull.sm{font-size:clamp(1.4rem,2.8vw,2rem)}
+  .pull .it{font-style:italic;color:var(--cyan)}.pull .am{font-style:italic;color:var(--amber)}
+  .sub{color:var(--mut);max-width:62ch;margin-top:1.4rem}.sub b{color:var(--text);font-weight:500}.sub code{color:var(--cyan)}
+  .note{margin-top:1rem;font-size:.78rem;color:var(--dim);max-width:62ch}.note code{color:var(--mut)}
+
+  /* two-plane diagram */
+  .planes{margin-top:2.4rem}
+  .lane{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:1.15rem 1.2rem}
+  .lane.data{border-color:rgba(125,211,252,.32);box-shadow:0 0 0 1px rgba(125,211,252,.1),0 0 60px -26px rgba(125,211,252,.5)}
+  .lane .lhead{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;margin-bottom:1rem}
+  .lane .lhead .name{font-size:.68rem;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);white-space:nowrap}
+  .lane.data .lhead .name{color:var(--cyan)}
+  .lane .lhead .note2{font-size:.76rem;color:var(--mut);margin:0;text-align:right}
+  .hops{display:flex;align-items:center;gap:.55rem;flex-wrap:wrap}
+  .hop{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:.55rem .8rem;display:flex;flex-direction:column;gap:.12rem;flex:1 1 0;min-width:120px}
+  .hop b{color:var(--text);font-weight:500;font-size:.86rem}
+  .hop span{color:var(--dim);font-size:.68rem;line-height:1.4}
+  .hop.dumb{border-color:rgba(252,211,77,.3)}.hop.dumb b{color:var(--amber)}
+  .hop.me,.hop.peer{border-color:rgba(125,211,252,.26)}.hop.me b,.hop.peer b{color:var(--cyan)}
+  .harrow{color:var(--faint);font-size:1rem;flex:none}
+  .lane.data .harrow{color:var(--cyan);font-size:1.2rem}
+  .bridge{display:flex;justify-content:center;align-items:center;gap:.5rem;color:var(--mut);font-size:.78rem;padding:.7rem 0;text-align:center}
+  .bridge .pipe{color:var(--cyan)}
+  .trust{margin-top:1.4rem;font-size:.82rem;color:var(--mut);border-left:2px solid var(--cyan);padding-left:.9rem}.trust b{color:var(--text);font-weight:500}
+
+  /* before / after cards */
+  .scope{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:2.4rem}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:1.3rem;position:relative;overflow:hidden}
+  .card.allow{border-color:rgba(74,222,128,.28)}.card.deny{border-color:rgba(251,113,133,.28)}
+  .card .ic{font-size:1.1rem;margin-bottom:.7rem}.card.allow .ic{color:var(--ok)}.card.deny .ic{color:var(--bad)}
+  .card .tag{font-size:.64rem;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);display:block;margin-bottom:.15rem}
+  .card code{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:.5rem .65rem;display:block;font-size:.76rem;margin:.7rem 0 0;color:var(--text)}
+  .card code .p{color:var(--ok)}.card code .ok{color:var(--ok)}.card code .bad{color:var(--bad)}
+  .card h4{font-size:.95rem;margin-bottom:.2rem}.card p{font-size:.8rem;color:var(--mut)}
+  .card .glow{position:absolute;inset:auto -30% -50% auto;width:200px;height:200px;border-radius:50%;filter:blur(60px);opacity:.18}
+  .card.allow .glow{background:var(--ok)}.card.deny .glow{background:var(--bad)}
+
+  /* plugin model trio */
+  .trio{display:grid;grid-template-columns:repeat(3,1fr);gap:.7rem;margin-top:2.4rem}
+  .node{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:1.1rem}
+  .node h4{font-size:.92rem;margin-bottom:.3rem}.node p{font-size:.78rem;color:var(--mut);line-height:1.55}
+  .node .tag{font-size:.64rem;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-bottom:.6rem;display:block}
+  .node code{color:var(--cyan)}
+
+  /* honest limits */
+  .limits{margin-top:2.2rem;display:grid;gap:.7rem}
+  .limit{display:grid;grid-template-columns:auto 1fr;gap:.9rem;align-items:start;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:.95rem 1.1rem}
+  .limit .sym{font-size:1rem;line-height:1.5;width:1.2rem;text-align:center}
+  .limit.yes .sym{color:var(--ok)}.limit.maybe .sym{color:var(--amber)}.limit.no .sym{color:var(--dim)}
+  .limit b{color:var(--text);font-weight:500}.limit p{font-size:.82rem;color:var(--mut)}
+
+  .get{display:grid;grid-template-columns:1.1fr 1fr;gap:2.5rem;align-items:center;margin-top:.5rem}
+  pre.code{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:1.2rem;font-size:.82rem;line-height:1.85;overflow-x:auto}
+  pre.code .c{color:var(--dim)}pre.code .p{color:var(--ok)}pre.code .f{color:var(--cyan)}
+
+  footer{border-top:1px solid var(--line);padding:3rem 0;color:var(--dim);font-size:.82rem}
+  footer .row{display:flex;flex-wrap:wrap;gap:1rem;justify-content:space-between;align-items:center}
+  footer a{color:var(--mut)}footer a:hover{color:var(--cyan)}
+  .privacy{display:inline-flex;gap:.45rem;align-items:center;color:var(--mut)}
+
+  @media (max-width:860px){
+    .hero{grid-template-columns:1fr;gap:2.2rem;padding:3.5rem 0 2.5rem}
+    .scope,.get{grid-template-columns:1fr}
+    .trio{grid-template-columns:1fr}
+    .hop{flex-basis:100%}
+    nav .links a.hideable{display:none}
+    .brand .slash{display:none}
+  }
+  @media (prefers-reduced-motion:reduce){.ln{opacity:1;animation:none}.cur{animation:none}*{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<nav><div class="wrap row">
+  <a href="/" class="brand">tunnel<b>.locker</b><span class="slash">/ <b>rendezvous</b></span></a>
+  <div class="links">
+    <a href="#how" class="hideable">how it works</a>
+    <a href="#limits" class="hideable">limits</a>
+    <a href="https://github.com/mcfearsome/tunnel-solutions">github</a>
+    <a href="#get" class="ghost">install</a>
+  </div>
+</div></nav>
+
+<header class="wrap hero">
+  <div>
+    <span class="eyebrow"><span class="dot"></span> rendezvous &middot; the first tnls plugin</span>
+    <h1>Send a big file through a door that <span class="em">evaporates</span>.
+      <span class="mono">// peer-to-peer over BitTorrent &mdash; scoped to one file, dead on a TTL, and the relay never sees a byte.</span>
+    </h1>
+    <p class="lede">Dropbox and ngrok move a file by copying it onto <b>someone else's server</b>. rendezvous keeps the bytes <b>peer-to-peer</b> and uses a capability tunnel only to authorize <b>which</b> file a teammate may pull &mdash; and for <b>how long</b>. Then the link dies.</p>
+    <div class="cta">
+      <button class="install" id="install" title="click to copy"><span class="pr">$</span> cargo install tnls <span class="cp" id="cp">copy</span></button>
+      <a href="https://github.com/mcfearsome/tunnel-solutions" class="btn">View source &rarr;</a>
+    </div>
+  </div>
+
+  <div class="term" aria-hidden="true">
+    <div class="bar"><i></i><i></i><i></i><span>tnls — zsh</span></div>
+    <div class="body">
+      <div class="ln cmd" style="--i:0"><span class="pr">$</span> tnls share ./demo.mov <span class="fl">--ttl 30m</span></div>
+      <div class="ln mut" style="--i:1">  seeding demo.mov (48.2 MB) &mdash; opening a scoped link&hellip;</div>
+      <div class="ln" style="--i:2">  peers      <span class="accent">127.0.0.1</span> &middot; <span class="accent">192.168.1.24</span> &middot; <span class="accent">73.140.x.x</span> <span class="mut">(loopback &middot; LAN &middot; public)</span></div>
+      <div class="ln" style="--i:3">  handshake  <span class="ok">&#10003;</span>  2 tools advertised</div>
+      <div class="ln" style="--i:4">  scope      <span class="accent">request_file</span> &middot; <span class="accent">list_shares</span> <span class="mut">(nothing else)</span></div>
+      <div class="ln" style="--i:5">  link  <span class="accent">&rarr;</span>    https://tunnel.locker/t/9f3c&hellip;<span class="mut">#token</span></div>
+      <div class="ln" style="--i:6">&nbsp;</div>
+      <div class="ln mut" style="--i:7">  &mdash; a teammate, elsewhere &mdash;</div>
+      <div class="ln cmd" style="--i:8"><span class="pr">$</span> tnls get <span class="mut">https://tunnel.locker/t/9f3c…#token</span></div>
+      <div class="ln" style="--i:9">  request_file  <span class="ok">&#10003;</span>  magnet + 3 peer hints</div>
+      <div class="ln" style="--i:10">  <span class="bar2">&#9656;</span> peer <span class="accent">127.0.0.1</span> connected <span class="mut">&mdash; no DHT wait</span></div>
+      <div class="ln" style="--i:11">  <span class="bar2">&#9656;</span> demo.mov  <span class="accent">&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;&#9608;</span>  48.2 MB  <span class="ok">&#10003; byte-for-byte</span><span class="cur"></span></div>
+    </div>
+  </div>
+</header>
+
+<section class="wrap">
+  <div class="kicker">the wedge</div>
+  <div class="pull">Moving bytes isn't new. Moving them <span class="it">peer-to-peer</span> while scoping them at the <span class="it">capability</span> level is.</div>
+  <p class="sub">The relay only ever brokers <b>permission</b> &mdash; it pairs two sockets by id and shuttles opaque frames. The file itself never passes through it, so you don't pay for the bandwidth and no third party holds your data. The same tunnel that says <b>yes, this file, for thirty minutes</b> also hands the downloader the seeder's address &mdash; so the transfer connects the instant the link is opened.</p>
+</section>
+
+<section class="wrap" id="how">
+  <div class="kicker">how it works</div>
+  <div class="pull sm">Two planes. The file never touches the <span class="am">relay</span>.</div>
+  <div class="planes">
+    <div class="lane">
+      <div class="lhead"><span class="name">control plane &middot; the tunnel</span><p class="note2">authorizes the fetch &middot; scoped + TTL'd<br>carries the magnet <b>and</b> the seeder's address</p></div>
+      <div class="hops">
+        <div class="hop me"><b>you</b><span>tnls share &mdash; the agent. holds the secret, enforces scope + TTL.</span></div>
+        <div class="harrow">&rarr;</div>
+        <div class="hop dumb"><b>relay</b><span>pairs the sockets, forwards opaque frames. holds nothing.</span></div>
+        <div class="harrow">&rarr;</div>
+        <div class="hop"><b>teammate</b><span>tnls get &mdash; receives the magnet + peer hints.</span></div>
+      </div>
+    </div>
+    <div class="bridge"><span class="pipe">&#8615;</span> the tunnel introduces the seeder's address &mdash; bootstrapping a direct connection</div>
+    <div class="lane data">
+      <div class="lhead"><span class="name">data plane &middot; BitTorrent</span><p class="note2">the bytes move directly, machine&#8209;to&#8209;machine<br><b>never</b> through the relay</p></div>
+      <div class="hops">
+        <div class="hop me"><b>you</b><span>seeding the file over librqbit.</span></div>
+        <div class="harrow">&#8646;</div>
+        <div class="hop peer"><b>teammate</b><span>pulls the bytes peer-to-peer, verified by infohash.</span></div>
+      </div>
+    </div>
+  </div>
+  <p class="trust"><b>The relay carries permission, not payload.</b> It introduces the peers and forwards the magnet; the bytes go straight between machines. A compromised relay can't read your file, widen the scope, or extend the TTL &mdash; it only moves opaque frames.</p>
+</section>
+
+<section class="wrap">
+  <div class="kicker">the rendezvous trick</div>
+  <div class="pull sm">No DHT wait. The door hands over the <span class="it">address</span>.</div>
+  <div class="scope">
+    <div class="card deny"><div class="glow"></div>
+      <span class="tag">plain BitTorrent</span>
+      <div class="ic">&#8987;</div><h4>discovery by DHT</h4>
+      <p>The getter has only a magnet, so it asks the DHT and public trackers to <i>find</i> the seeder. On one host, the same LAN, or behind hairpin NAT, that often never connects in a useful window.</p>
+      <code><span class="p">$</span> tnls get &hellip;  <span class="bad">waiting for peers&hellip; (DHT)</span></code>
+    </div>
+    <div class="card allow"><div class="glow"></div>
+      <span class="tag">with rendezvous</span>
+      <div class="ic">&#9889;</div><h4>introduction by tunnel</h4>
+      <p><code>share</code> gathers its reachable addresses &mdash; loopback, every LAN IP, and its public IP from the relay's <code>/whoami</code> &mdash; and ships them through the tunnel. <code>get</code> feeds them straight to BitTorrent as <code>initial_peers</code>.</p>
+      <code><span class="p">$</span> tnls get &hellip;  <span class="ok">peer 127.0.0.1 connected &middot; 0s</span></code>
+    </div>
+  </div>
+  <p class="note">Same transfer mechanism either way &mdash; rendezvous just skips the search. Unreachable hints fail silently; the DHT and trackers remain as the fallback.</p>
+</section>
+
+<section class="wrap">
+  <div class="kicker">the plugin model</div>
+  <div class="pull sm">rendezvous is a <span class="it">plugin</span>. It can only ever narrow.</div>
+  <div class="trio">
+    <div class="node"><span class="tag">declares</span><h4>its scope</h4><p>A file share needs exactly two tools: <code>request_file</code> and <code>list_shares</code>. That's the entire capability the link exposes.</p></div>
+    <div class="node"><span class="tag">constrained</span><h4>only narrows</h4><p>It selects an allowlist of tool names &mdash; it can't widen a TTL, forge a token, or reach the relay. Adding a capability adds <b>no</b> trust.</p></div>
+    <div class="node"><span class="tag">isolated</span><h4>never sees the secret</h4><p>The host stays the sole agent; the plugin is spawned over stdio exactly like any MCP server. The 32-byte signing key never leaves the host.</p></div>
+  </div>
+  <p class="note">The host/plugin split is landing step by step. Today this ships as <code>tnls share</code> / <code>tnls get</code>; under the plugin model the commands become <code>tnls rendezvous share</code> / <code>tnls rendezvous get</code> &mdash; same behavior, same single enforcement point.</p>
+</section>
+
+<section class="wrap" id="limits">
+  <div class="kicker">honest limits</div>
+  <div class="pull sm">When the direct path works &mdash; and when it <span class="am">falls back</span>.</div>
+  <div class="limits">
+    <div class="limit yes"><div class="sym">&#10003;</div><div><b>loopback &amp; same-LAN</b><p>Always connects directly &mdash; the advertised <code>127.0.0.1</code> and LAN addresses are reachable, so the transfer starts immediately.</p></div></div>
+    <div class="limit maybe"><div class="sym">~</div><div><b>public internet</b><p>Connects when UPnP maps the seeder's port and your router preserves it &mdash; the common consumer case. The public address comes from the relay's <code>/whoami</code>, no third-party echo service.</p></div></div>
+    <div class="limit no"><div class="sym">&rarr;</div><div><b>hard / symmetric NAT</b><p>No direct hole-punch yet; it falls back to the DHT and trackers. The relay never becomes a data fallback &mdash; it carries permission, never payload. (True hole-punching is future work.)</p></div></div>
+  </div>
+</section>
+
+<section class="wrap" id="get">
+  <div class="kicker">get started</div>
+  <div class="get">
+    <pre class="code"><span class="c"># install the CLI</span>
+<span class="p">$</span> cargo install tnls
+
+<span class="c"># share a file on a scoped link that expires</span>
+<span class="c"># (bytes stay peer-to-peer; default relay is tunnel.locker)</span>
+<span class="p">$</span> tnls share ./big.mov <span class="f">--ttl 30m</span>
+<span class="c"># &rarr; prints https://tunnel.locker/t/&lt;id&gt;#&lt;token&gt;</span>
+
+<span class="c"># on the other side &mdash; pull it straight from you</span>
+<span class="p">$</span> tnls get <span class="f">&lt;link&gt; --out ./tnls-downloads</span></pre>
+    <div>
+      <div class="pull" style="font-size:1.5rem">Peer-to-peer,<br>but <span class="it">governed</span>.</div>
+      <p class="sub" style="margin-top:1rem">One file, one scope, one TTL. The bytes never leave your control plane's authority &mdash; close the tunnel and the link is dead, mid-transfer included.</p>
+      <p class="note"><code>tnls share</code> seeds for the life of the process; <kbd>Ctrl-C</kbd> or the TTL tears it down and stops seeding.</p>
+    </div>
+  </div>
+</section>
+
+<footer><div class="wrap row">
+  <span class="privacy">&#9679; cookieless &middot; no fingerprinting &middot; the relay holds no state past a session</span>
+  <span>
+    <a href="/">&larr; tunnel.locker</a> &nbsp;&middot;&nbsp;
+    <a href="https://github.com/mcfearsome/tunnel-solutions">github</a> &nbsp;&middot;&nbsp;
+    <a href="https://crates.io/crates/tnls">crates.io</a> &nbsp;&middot;&nbsp;
+    <a href="/stats">stats</a>
+  </span>
+</div></footer>
+
+<script>
+  // copy the install command (textContent only — no innerHTML, no XSS surface)
+  const inst = document.getElementById("install");
+  if (inst) inst.addEventListener("click", () => {
+    navigator.clipboard?.writeText("cargo install tnls").then(() => {
+      const cp = document.getElementById("cp"); if (!cp) return;
+      cp.textContent = "copied"; cp.style.color = "var(--ok)";
+      setTimeout(() => { cp.textContent = "copy"; cp.style.color = ""; }, 1600);
+    }).catch(() => {});
+  });
+</script>
+</body>
+</html>
