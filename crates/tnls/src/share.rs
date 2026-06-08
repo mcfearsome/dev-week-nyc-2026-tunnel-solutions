@@ -103,7 +103,7 @@ pub async fn run_share(args: ShareArgs) -> Result<()> {
         server_args.push(a.clone());
     }
 
-    tunnel_locker::session::open(tunnel_locker::session::OpenArgs {
+    tnls_tunnel::session::open(tnls_tunnel::session::OpenArgs {
         server: exe,
         server_args,
         ttl: args.ttl,

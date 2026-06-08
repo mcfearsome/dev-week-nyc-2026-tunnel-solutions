@@ -1,8 +1,8 @@
 use anyhow::{anyhow, bail, Context, Result};
 use futures_util::{SinkExt, StreamExt};
 use std::net::SocketAddr;
-use tokio_tungstenite::tungstenite::Message;
 use tnls_core::{AgentFrame, ViewerFrame};
+use tokio_tungstenite::tungstenite::Message;
 
 #[derive(Debug)]
 pub struct RetrievedFile {

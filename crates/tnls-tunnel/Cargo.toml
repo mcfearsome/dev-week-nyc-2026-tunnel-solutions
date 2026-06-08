@@ -1,5 +1,5 @@
 [package]
-name = "tunnel-locker"
+name = "tnls-tunnel"
 version = "0.1.0"
 edition = "2021"
 description = "Ephemeral, capability-scoped tunnel for a local MCP server — share specific tools with a teammate over a disposable link."

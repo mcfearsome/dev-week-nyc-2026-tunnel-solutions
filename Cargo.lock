@@ -3315,9 +3315,9 @@ dependencies = [
  "reqwest",
  "serde_json",
  "tnls-core",
+ "tnls-tunnel",
  "tokio",
  "tokio-tungstenite 0.23.1",
- "tunnel-locker",
  "urlencoding",
 ]
 
@@ -3333,6 +3333,27 @@ dependencies = [
  "sha2",
  "subtle",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "tnls-tunnel"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum 0.7.9",
+ "clap",
+ "futures-util",
+ "getrandom 0.2.17",
+ "hex 0.4.3",
+ "humantime",
+ "nix 0.29.0",
+ "relay",
+ "rustls",
+ "serde",
+ "serde_json",
+ "tnls-core",
+ "tokio",
+ "tokio-tungstenite 0.23.1",
 ]
 
 [[package]]
@@ -3567,27 +3588,6 @@ dependencies = [
  "sha1",
  "thiserror 1.0.69",
  "utf-8",
-]
-
-[[package]]
-name = "tunnel-locker"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum 0.7.9",
- "clap",
- "futures-util",
- "getrandom 0.2.17",
- "hex 0.4.3",
- "humantime",
- "nix 0.29.0",
- "relay",
- "rustls",
- "serde",
- "serde_json",
- "tnls-core",
- "tokio",
- "tokio-tungstenite 0.23.1",
 ]
 
 [[package]]

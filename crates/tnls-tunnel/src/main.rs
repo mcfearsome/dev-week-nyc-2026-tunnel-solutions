@@ -1,6 +1,6 @@
 use clap::Parser;
-use tunnel_locker::cli::{parse_scope, Cli, Command};
-use tunnel_locker::session::{self, OpenArgs};
+use tnls_tunnel::cli::{parse_scope, Cli, Command};
+use tnls_tunnel::session::{self, OpenArgs};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
