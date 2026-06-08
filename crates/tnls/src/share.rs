@@ -109,6 +109,7 @@ pub async fn run_share(args: ShareArgs) -> Result<()> {
         ttl: args.ttl,
         scope: vec!["list_shares".into(), "request_file".into()],
         relay: args.relay,
+        env: vec![],
     })
     .await?; // blocks until the tunnel is revoked (Ctrl-C / TTL); _seeder drops, seeding stops.
     Ok(())

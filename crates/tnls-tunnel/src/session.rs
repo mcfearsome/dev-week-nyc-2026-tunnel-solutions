@@ -19,6 +19,8 @@ pub struct OpenArgs {
     pub ttl: Duration,
     pub scope: Vec<String>,
     pub relay: String,
+    /// Extra env for the spawned MCP child (e.g. ("TNLS_RELAY", relay)). Empty for `open`.
+    pub env: Vec<(String, String)>,
 }
 
 fn now_secs() -> u64 {
@@ -63,7 +65,7 @@ fn err_frame(id: Option<u64>, code: ErrorCode, tool: Option<String>, msg: &str) 
 
 pub async fn open(args: OpenArgs) -> Result<()> {
     // 1. Spawn + handshake the child BEFORE dialing the relay (fail loud, leave nothing open).
-    let mut child = McpChild::spawn(&args.server, &args.server_args).await?;
+    let mut child = McpChild::spawn(&args.server, &args.server_args, &args.env).await?;
     let child_tools = child.tools.clone();
 
     // 2. Identity, secret, token.
@@ -336,7 +338,7 @@ fn print_banner(args: &OpenArgs, child_tools: &[Tool], host: &str, id: &str, tok
         link_scheme(&args.relay)
     );
     println!();
-    println!("  serving — ctrl-c or `tunnel close` to revoke");
+    println!("  serving — ctrl-c or `tnls close` to revoke");
     println!();
 }
 

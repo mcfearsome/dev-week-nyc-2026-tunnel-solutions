@@ -11,7 +11,7 @@ fn mcp_demo_bin() -> String {
 
 #[tokio::test]
 async fn handshake_lists_tools_and_calls_shell() {
-    let mut child = tnls_tunnel::mcp::McpChild::spawn(&mcp_demo_bin(), &[])
+    let mut child = tnls_tunnel::mcp::McpChild::spawn(&mcp_demo_bin(), &[], &[])
         .await
         .unwrap();
 

@@ -1,143 +1,89 @@
-use anyhow::{anyhow, Context, Result};
-use serde_json::{json, Value};
-use std::collections::HashMap;
-use std::process::Stdio;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, ChildStdin, Command};
-use tokio::sync::{oneshot, Mutex};
+use anyhow::{anyhow, bail, Result};
+use rmcp::{
+    model::{CallToolRequestParams, CallToolResult},
+    service::RunningService,
+    transport::TokioChildProcess,
+    RoleClient, ServiceExt,
+};
+use serde_json::{json, Map, Value};
+use tnls_core::Tool;
+use tokio::process::Command;
 
-type Pending = Arc<Mutex<HashMap<u64, oneshot::Sender<Value>>>>;
-
-/// A spawned MCP server we speak JSON-RPC to over its stdio.
+/// A spawned MCP server we speak JSON-RPC to over its stdio, via the official `rmcp` client.
+/// The hand-rolled request/response plumbing is gone — rmcp owns the framing and handshake.
 pub struct McpChild {
-    child: Child,
-    stdin: ChildStdin,
-    pending: Pending,
-    next_id: AtomicU64,
-    pub tools: Vec<tnls_core::Tool>,
+    service: RunningService<RoleClient, ()>,
+    /// Tools advertised at handshake, in the wire shape the agent forwards to the viewer.
+    pub tools: Vec<Tool>,
 }
 
 impl McpChild {
-    /// Spawn, run the MCP handshake (`initialize` → `initialized` → `tools/list`),
-    /// and cache the tool list. Fails loudly if the child can't be driven.
-    pub async fn spawn(cmd: &str, args: &[String]) -> Result<Self> {
-        let mut child = Command::new(cmd)
-            .args(args)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .kill_on_drop(true)
-            .spawn()
-            .with_context(|| format!("spawning MCP server '{cmd}'"))?;
-
-        let stdin = child
-            .stdin
-            .take()
-            .ok_or_else(|| anyhow!("child has no stdin"))?;
-        let stdout = child
-            .stdout
-            .take()
-            .ok_or_else(|| anyhow!("child has no stdout"))?;
-        let pending: Pending = Arc::new(Mutex::new(HashMap::new()));
-
-        // Background reader: dispatch responses to waiters by id.
-        {
-            let pending = pending.clone();
-            tokio::spawn(async move {
-                let mut lines = BufReader::new(stdout).lines();
-                while let Ok(Some(line)) = lines.next_line().await {
-                    if line.trim().is_empty() {
-                        continue;
-                    }
-                    let Ok(msg) = serde_json::from_str::<Value>(&line) else {
-                        continue;
-                    };
-                    if let Some(id) = msg.get("id").and_then(|v| v.as_u64()) {
-                        if let Some(tx) = pending.lock().await.remove(&id) {
-                            let _ = tx.send(msg);
-                        }
-                    }
-                    // No id => notification; ignore.
-                }
-            });
+    /// Spawn `cmd args` (with `env`) as an MCP server, run the rmcp `initialize` handshake,
+    /// and cache the advertised tool list. Fails loudly if the child can't be driven.
+    pub async fn spawn(cmd: &str, args: &[String], env: &[(String, String)]) -> Result<Self> {
+        let mut command = Command::new(cmd);
+        command.args(args);
+        for (k, v) in env {
+            command.env(k, v);
         }
+        let transport = TokioChildProcess::new(command)
+            .map_err(|e| anyhow!("spawning MCP server '{cmd}': {e}"))?;
+        let service =
+            ().serve(transport)
+                .await
+                .map_err(|e| anyhow!("MCP handshake with '{cmd}': {e}"))?;
+        let tools = service
+            .list_all_tools()
+            .await
+            .map_err(|e| anyhow!("listing tools from '{cmd}': {e}"))?
+            .into_iter()
+            .map(convert_tool)
+            .collect();
+        Ok(Self { service, tools })
+    }
 
-        let mut me = McpChild {
-            child,
-            stdin,
-            pending,
-            next_id: AtomicU64::new(1),
-            tools: vec![],
+    /// Call `tool` with JSON `args`. Returns `{ "content": [...] }` (what the agent forwards
+    /// to the viewer as an `AgentFrame::Result`); a tool-reported error becomes `Err`, which
+    /// `session.rs` maps to `ErrorCode::ToolError`.
+    pub async fn call_tool(&self, tool: &str, args: Value) -> Result<Value> {
+        let arguments = match args {
+            Value::Object(m) => Some(m),
+            Value::Null => None,
+            other => Some(Map::from_iter([("value".to_string(), other)])),
         };
-
-        me.request(
-            "initialize",
-            json!({
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": { "name": "tunnel", "version": "0.1.0" }
-            }),
-        )
-        .await
-        .context("MCP initialize")?;
-        me.notify("notifications/initialized", json!({})).await?;
-
-        let list = me
-            .request("tools/list", json!({}))
+        let params = if let Some(args) = arguments {
+            CallToolRequestParams::new(tool.to_string()).with_arguments(args)
+        } else {
+            CallToolRequestParams::new(tool.to_string())
+        };
+        let result: CallToolResult = self
+            .service
+            .call_tool(params)
             .await
-            .context("MCP tools/list")?;
-        me.tools = serde_json::from_value(list.get("tools").cloned().unwrap_or(json!([])))
-            .context("parsing tools/list")?;
-        Ok(me)
-    }
-
-    fn alloc_id(&self) -> u64 {
-        self.next_id.fetch_add(1, Ordering::Relaxed)
-    }
-
-    /// Send a request and await its `result` (surfacing any JSON-RPC `error`).
-    pub async fn request(&mut self, method: &str, params: Value) -> Result<Value> {
-        let id = self.alloc_id();
-        let (tx, rx) = oneshot::channel();
-        self.pending.lock().await.insert(id, tx);
-
-        let line = format!(
-            "{}\n",
-            json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params })
-        );
-        self.stdin.write_all(line.as_bytes()).await?;
-        self.stdin.flush().await?;
-
-        let resp = tokio::time::timeout(Duration::from_secs(10), rx)
-            .await
-            .map_err(|_| anyhow!("MCP request '{method}' timed out"))?
-            .map_err(|_| anyhow!("MCP reader dropped before responding"))?;
-        if let Some(e) = resp.get("error") {
-            return Err(anyhow!("MCP error: {e}"));
+            .map_err(|e| anyhow!("{e}"))?;
+        if result.is_error == Some(true) {
+            bail!(
+                "{}",
+                serde_json::to_string(&result.content).unwrap_or_default()
+            );
         }
-        Ok(resp.get("result").cloned().unwrap_or(Value::Null))
+        Ok(json!({ "content": result.content }))
     }
 
-    async fn notify(&mut self, method: &str, params: Value) -> Result<()> {
-        let line = format!(
-            "{}\n",
-            json!({ "jsonrpc": "2.0", "method": method, "params": params })
-        );
-        self.stdin.write_all(line.as_bytes()).await?;
-        self.stdin.flush().await?;
-        Ok(())
-    }
-
-    /// Invoke a tool; returns the MCP tool `result` object (`{ content: [...] }`).
-    pub async fn call_tool(&mut self, name: &str, args: Value) -> Result<Value> {
-        self.request("tools/call", json!({ "name": name, "arguments": args }))
-            .await
-    }
-
+    /// Stop the child: close the rmcp service, which closes the transport; rmcp's
+    /// `TokioChildProcess` cleans up the OS process on drop.
     pub async fn kill(&mut self) {
-        let _ = self.child.start_kill();
+        let _ = self.service.close().await;
+    }
+}
+
+/// `rmcp::model::Tool` → the wire `Tool` the viewer sees. Name and (camelCase) `inputSchema`
+/// must be preserved verbatim — `filter_tools`/`decide_call` match on `name`, and the e2e
+/// asserts the advertised order.
+fn convert_tool(t: rmcp::model::Tool) -> Tool {
+    Tool {
+        name: t.name.to_string(),
+        description: t.description.map(|d| d.to_string()),
+        input_schema: Value::Object((*t.input_schema).clone()),
     }
 }

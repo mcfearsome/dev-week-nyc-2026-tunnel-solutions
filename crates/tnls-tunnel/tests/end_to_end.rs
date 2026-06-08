@@ -69,6 +69,7 @@ async fn read_succeeds_shell_refused() {
         ttl: Duration::from_secs(120),
         scope: vec!["read".into()],
         relay: relay_url.clone(),
+        env: vec![],
     };
     tokio::spawn(async move {
         tnls_tunnel::session::open(open).await.unwrap();

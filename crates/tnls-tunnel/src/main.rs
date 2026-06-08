@@ -21,6 +21,7 @@ async fn main() -> anyhow::Result<()> {
                 ttl,
                 scope: parse_scope(&scope),
                 relay,
+                env: vec![],
             })
             .await
         }

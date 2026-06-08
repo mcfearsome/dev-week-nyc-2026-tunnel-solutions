@@ -13,6 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 tnls-core = { path = "../tnls-core", version = "0.1.0" }
+rmcp = { version = "1.7", features = ["client", "transport-child-process"] }
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true
