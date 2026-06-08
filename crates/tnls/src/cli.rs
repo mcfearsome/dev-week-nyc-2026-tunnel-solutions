@@ -33,7 +33,7 @@ pub enum Cmd {
         #[arg(long)]
         tunnel_id: Option<String>,
     },
-    /// List discovered `tnls-*` plugins and their commands.
+    /// List discovered `tnls-*` plugins.
     Plugins,
     /// Dispatch to a plugin: `tnls <name> <command> [args…]`.
     #[command(external_subcommand)]

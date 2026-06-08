@@ -57,6 +57,13 @@ pub async fn run(
         .output()
         .await
         .with_context(|| format!("running '{} describe'", bin.display()))?;
+    if !out.status.success() {
+        bail!(
+            "'{name} describe' failed ({}): {}",
+            out.status,
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
     let manifest: Manifest = serde_json::from_slice(&out.stdout)
         .with_context(|| format!("parsing describe from '{name}'"))?;
 

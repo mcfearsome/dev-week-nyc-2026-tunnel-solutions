@@ -26,7 +26,7 @@ pub fn resolve(name: &str) -> Option<PathBuf> {
     resolve_in(&search_dirs(), name)
 }
 
-/// All discovered plugin names (deduped, first-found wins).
+/// All discovered plugin names (unique, sorted).
 pub fn list_names() -> Vec<String> {
     let mut seen = std::collections::BTreeSet::new();
     for dir in search_dirs() {
