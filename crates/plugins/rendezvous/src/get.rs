@@ -159,11 +159,7 @@ pub async fn run_get(link: &str, out_dir: &std::path::Path) -> Result<()> {
     .await?;
     loop {
         let p = dl.progress();
-        let pct = if p.total > 0 {
-            p.downloaded * 100 / p.total
-        } else {
-            0
-        };
+        let pct = (p.downloaded * 100).checked_div(p.total).unwrap_or(0);
         println!("  {pct:>3}%  {}/{} bytes", p.downloaded, p.total);
         if p.finished {
             break;
