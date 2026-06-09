@@ -24,6 +24,7 @@ async fn main() -> Result<()> {
                 scope: parse_scope(&cli.scope.unwrap_or_default()),
                 relay: cli.relay,
                 env: vec![],
+                ..Default::default()
             })
             .await
         }

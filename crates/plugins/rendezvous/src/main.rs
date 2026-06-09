@@ -1,12 +1,8 @@
-mod bittorrent;
-mod get;
-mod server;
-mod share;
-
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::path::Path;
 use std::time::Duration;
+use tnls_rendezvous::{bittorrent, get, share};
 
 #[derive(Parser)]
 #[command(

@@ -82,6 +82,7 @@ pub async fn run(
                 scope,
                 relay: relay.clone(),
                 env: vec![("TNLS_RELAY".to_string(), relay)],
+                ..Default::default()
             })
             .await
         }

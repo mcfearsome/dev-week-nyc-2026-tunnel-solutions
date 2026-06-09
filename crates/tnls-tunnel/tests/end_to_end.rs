@@ -71,6 +71,67 @@ async fn read_link(expected_relay_port: u16) -> (String, String) {
     panic!("agent never published a pidfile/link");
 }
 
+/// Embedder path (used by the egui GUI): the link arrives via the `on_link` callback with
+/// the banner suppressed, and notifying the external `shutdown` tears the tunnel down without
+/// any signal or TTL. Hermetic — demo server over stdio + a loopback relay.
+#[tokio::test]
+async fn on_link_fires_and_external_shutdown_tears_down() {
+    use std::sync::{Arc, Mutex};
+    use tokio::sync::Notify;
+
+    build("tnls-demo");
+    let port = spawn_relay().await;
+    let relay_url = format!("ws://127.0.0.1:{port}");
+    let mcp = format!(
+        "{}/../../target/debug/tnls-demo",
+        env!("CARGO_MANIFEST_DIR")
+    );
+
+    let captured: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+    let shutdown = Arc::new(Notify::new());
+
+    let captured_cb = captured.clone();
+    let open = tnls_tunnel::session::OpenArgs {
+        server: mcp,
+        server_args: vec!["serve".to_string()],
+        ttl: Duration::from_secs(120),
+        scope: vec!["read".into()],
+        relay: relay_url.clone(),
+        env: vec![],
+        quiet: true,
+        on_link: Some(Box::new(move |link| {
+            *captured_cb.lock().unwrap() = Some(link);
+        })),
+        shutdown: Some(shutdown.clone()),
+    };
+    let agent = tokio::spawn(async move { tnls_tunnel::session::open(open).await });
+
+    // on_link should deliver a well-formed link for our relay instance.
+    let link = {
+        let mut got = None;
+        for _ in 0..50 {
+            if let Some(l) = captured.lock().unwrap().clone() {
+                got = Some(l);
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        got.expect("on_link never fired")
+    };
+    assert!(
+        link.contains(&format!(":{port}/t/")) && link.contains('#'),
+        "bad link from on_link: {link}"
+    );
+
+    // External shutdown must end `open` promptly (no signal, no TTL).
+    shutdown.notify_one();
+    let ended = tokio::time::timeout(Duration::from_secs(10), agent).await;
+    assert!(
+        matches!(ended, Ok(Ok(Ok(())))),
+        "open did not return Ok after external shutdown: {ended:?}"
+    );
+}
+
 #[tokio::test]
 async fn read_succeeds_shell_refused() {
     build("tnls-demo");
@@ -91,6 +152,7 @@ async fn read_succeeds_shell_refused() {
         scope: vec!["read".into()],
         relay: relay_url.clone(),
         env: vec![],
+        ..Default::default()
     };
     tokio::spawn(async move {
         tnls_tunnel::session::open(open).await.unwrap();

@@ -13,7 +13,7 @@ a disposable link, sees only the tools/files you allow, and the link dies on TTL
 | `tnls` | `tnls` | Host: `open`/`close`/`plugins` + plugin dispatch via `describe`. |
 | `tnls-demo` | `tnls-demo` (`plugins/demo`) | Sample rmcp MCP server plugin (read + shell). |
 | `tnls-rendezvous` | `tnls-rendezvous` (`plugins/rendezvous`) | File sending over BitTorrent plugin. |
-| `tnls-rendezvous-gui` | `rendezvous-gui` (`crates/rendezvous-gui`) | Native egui front-end; a **thin subprocess driver** over `tnls rendezvous share`/`get` (no tunnel/crypto of its own — enforcement stays at the agent). |
+| `tnls-rendezvous-gui` | `rendezvous-gui` (`crates/rendezvous-gui`) | Native egui front-end driving the libraries **in-process**: `tnls_tunnel::session::open` (send) + `tnls_rendezvous::{get,bittorrent}` (receive). No tunnel/crypto of its own — enforcement stays at the agent. |
 
 The README documents `tnls`. For architecture details trust the crates + `docs/superpowers/`. Recent work: `tnls-rendezvous` (BitTorrent + peer rendezvous — built & tested); don't assume the README is fully current.
 
@@ -43,12 +43,12 @@ viewer ──ws──> relay <──ws── agent ──stdio──> tnls-<name
 
 crates/
   tnls-core/           Pure logic: HMAC token, scope filter, per-call decision, TTL parse, frames. No I/O; exhaustively unit-tested.
-  tnls-tunnel/         The tunnel agent library: session::open (secret, scope, TTL), McpChild (rmcp client over TokioChildProcess).
+  tnls-tunnel/         The tunnel agent library: session::open (secret, scope, TTL), McpChild (rmcp client over TokioChildProcess). OpenArgs has embedder hooks — quiet (suppress banner), on_link (link callback), shutdown (external teardown; also disables the built-in SIGINT/SIGTERM handlers) — used by the GUI; plain CLI leaves them default.
   tnls-plugin/         The `describe` manifest contract shared by host + plugins.
   tnls/                The host binary (bin: tnls): open/close/plugins + dispatches to tnls-<name> plugins via describe manifest.
   plugins/demo/        bin: tnls-demo — sample rmcp MCP server (read + shell). Subcommands: serve | describe.
-  plugins/rendezvous/  bin: tnls-rendezvous — file sending over BitTorrent. Subcommands: share | get | seed | fetch | describe.
-  rendezvous-gui/      bin: tnls-rendezvous-gui — native egui front-end; spawns `tnls rendezvous share`/`get` and parses their output. Pure line parsers unit-tested; window is manual-only.
+  plugins/rendezvous/  lib `tnls_rendezvous` + bin tnls-rendezvous — file sending over BitTorrent. The lib (bittorrent/get/server/share) is reused in-process by the GUI; the bin adds the CLI/describe. Subcommands: share | get | seed | fetch | describe.
+  rendezvous-gui/      bin: tnls-rendezvous-gui — native egui front-end; drives session::open (send, via on_link + shutdown) and tnls_rendezvous get/fetch (receive) in-process on a background tokio runtime. Window is manual-only.
   relay/               Rocket WS pairing service (bin: relay). In-memory, no state past session. The only deployed component.
 viewer/                Static HTML (index/landing/stats), no build step — include_str!'d into the relay binary.
 docs/superpowers/      Design specs + phased implementation plans (see Design docs below).

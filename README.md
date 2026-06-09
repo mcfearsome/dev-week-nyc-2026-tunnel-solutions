@@ -11,7 +11,7 @@ One pluggable host (`tnls`) + plugins — two use-cases on one primitive:
 | `tnls` | `tnls` | Host: `open`/`close`/`plugins` + plugin dispatch via `describe`. |
 | `tnls-demo` | `tnls-demo` (`plugins/demo`) | Sample rmcp MCP server plugin exposing `read` + `shell` — scoped tunnel to your local MCP server. |
 | `tnls-rendezvous` | `tnls-rendezvous` (`plugins/rendezvous`) | **Capability-scoped file sending over BitTorrent**: seed a file, hand out the magnet through a scoped link, bytes move peer-to-peer. |
-| `tnls-rendezvous-gui` | `rendezvous-gui` (`crates/rendezvous-gui`) | Native **egui** front-end for `tnls rendezvous` — drag-to-send, paste-a-link-to-receive, live progress. A thin driver over the host CLI. |
+| `tnls-rendezvous-gui` | `rendezvous-gui` (`crates/rendezvous-gui`) | Native **egui** front-end for `tnls rendezvous` — drag-to-send, paste-a-link-to-receive, live progress. Drives the tunnel + BitTorrent libraries **in-process**. |
 
 **Live relay + landing page: https://tunnel.locker**
 
