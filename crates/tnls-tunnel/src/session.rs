@@ -13,6 +13,7 @@ use tokio_tungstenite::tungstenite::Message;
 use crate::mcp::McpChild;
 use crate::pidfile;
 
+#[derive(Default)]
 pub struct OpenArgs {
     pub server: String,
     pub server_args: Vec<String>,
@@ -21,6 +22,16 @@ pub struct OpenArgs {
     pub relay: String,
     /// Extra env for the spawned MCP child (e.g. ("TNLS_RELAY", relay)). Empty for `open`.
     pub env: Vec<(String, String)>,
+    /// Suppress the human banner on stdout. Set by embedders (e.g. the GUI) that take the
+    /// link via `on_link` instead of reading stdout. A plain CLI leaves this `false`.
+    pub quiet: bool,
+    /// Invoked once with the viewer link the moment the tunnel goes live. Lets an embedder
+    /// surface the link without scraping stdout.
+    pub on_link: Option<Box<dyn FnMut(String) + Send>>,
+    /// External teardown trigger. When `Some`, the agent also shuts down when this is
+    /// notified, and does **not** install its own SIGINT/SIGTERM handlers — the embedder
+    /// owns process signals. A plain CLI leaves this `None` and keeps signal-driven revoke.
+    pub shutdown: Option<Arc<Notify>>,
 }
 
 fn now_secs() -> u64 {
@@ -63,7 +74,7 @@ fn err_frame(id: Option<u64>, code: ErrorCode, tool: Option<String>, msg: &str) 
     }
 }
 
-pub async fn open(args: OpenArgs) -> Result<()> {
+pub async fn open(mut args: OpenArgs) -> Result<()> {
     // 1. Spawn + handshake the child BEFORE dialing the relay (fail loud, leave nothing open).
     let mut child = McpChild::spawn(&args.server, &args.server_args, &args.env).await?;
     let child_tools = child.tools.clone();
@@ -96,7 +107,13 @@ pub async fn open(args: OpenArgs) -> Result<()> {
         link_scheme(&args.relay)
     );
     pidfile::write(&tunnel_id, &link)?;
-    print_banner(&args, &child_tools, &host, &tunnel_id, &token);
+    if !args.quiet {
+        print_banner(&args, &child_tools, &host, &tunnel_id, &token);
+    }
+    // Hand the link to an embedder (e.g. the GUI) the instant the tunnel is live.
+    if let Some(cb) = args.on_link.as_mut() {
+        cb(link.clone());
+    }
 
     // 5. Outbound frames -> relay sink.
     let (out_tx, mut out_rx) = mpsc::unbounded_channel::<AgentFrame>();
@@ -115,6 +132,17 @@ pub async fn open(args: OpenArgs) -> Result<()> {
 
     let shutdown = Arc::new(Notify::new());
 
+    // 5b. Embedder-driven teardown: when the caller supplies a `shutdown` Notify, bridge it
+    // into the internal notifier and let the embedder (not signals) own revocation.
+    let embedder_driven = args.shutdown.is_some();
+    if let Some(ext) = args.shutdown.clone() {
+        let internal = shutdown.clone();
+        tokio::spawn(async move {
+            ext.notified().await;
+            internal.notify_one();
+        });
+    }
+
     // 6. TTL timer: emit Expired, then trigger shutdown.
     {
         let out_tx = out_tx.clone();
@@ -129,8 +157,9 @@ pub async fn open(args: OpenArgs) -> Result<()> {
         });
     }
 
-    // 7. SIGINT/SIGTERM -> shutdown.
-    {
+    // 7. SIGINT/SIGTERM -> shutdown. Skipped when embedder-driven: a host process (the GUI)
+    // owns its own signals and revokes via the `shutdown` Notify instead.
+    if !embedder_driven {
         let shutdown = shutdown.clone();
         tokio::spawn(async move {
             use tokio::signal::unix::{signal, SignalKind};

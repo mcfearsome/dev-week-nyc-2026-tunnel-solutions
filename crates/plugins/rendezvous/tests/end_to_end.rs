@@ -95,6 +95,7 @@ async fn get_transfers_the_file_through_the_tunnel() {
                 ("TNLS_RELAY".to_string(), relay_url_clone),
                 ("TNLS_DISABLE_DHT".to_string(), "1".to_string()),
             ],
+            ..Default::default()
         })
         .await
     });
