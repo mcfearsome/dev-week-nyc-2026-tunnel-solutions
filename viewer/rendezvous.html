@@ -57,6 +57,11 @@
   .install:hover{border-color:var(--faint)}.install .pr{color:var(--ok)}.install .cp{color:var(--dim);font-size:.78rem;margin-left:.3rem}
   .btn{background:var(--cyan);color:#04141f;font-weight:600;border-radius:9px;padding:.72rem 1.15rem;border:0;font-family:inherit;font-size:.9rem;cursor:pointer;transition:.2s;box-shadow:0 6px 24px -10px rgba(125,211,252,.6)}
   .btn:hover{background:var(--cyan-d);transform:translateY(-1px)}
+  .btn.dl{display:inline-flex;align-items:center;gap:.5rem}.btn .dlico{font-size:1.05em;line-height:1}
+  .cta-sub{margin-top:.95rem;font-size:.8rem;color:var(--dim);display:flex;gap:.55rem;flex-wrap:wrap;align-items:center}
+  .cta-sub a{color:var(--mut);border-bottom:1px solid var(--faint);transition:.2s}
+  .cta-sub a:hover{color:var(--cyan);border-color:var(--cyan)}
+  .cta-sub .sep{color:var(--faint)}
 
   .term{background:linear-gradient(180deg,#0d111b,#0a0d15);border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:0 40px 90px -50px rgba(0,0,0,.9),0 0 0 1px rgba(125,211,252,.04),inset 0 1px 0 rgba(255,255,255,.03)}
   .term .bar{display:flex;align-items:center;gap:.5rem;padding:.7rem .9rem;border-bottom:1px solid var(--line);background:rgba(255,255,255,.015)}
@@ -167,8 +172,14 @@
     </h1>
     <p class="lede">Dropbox and ngrok move a file by copying it onto <b>someone else's server</b>. rendezvous keeps the bytes <b>peer-to-peer</b> and uses a capability tunnel only to authorize <b>which</b> file a teammate may pull &mdash; and for <b>how long</b>. Then the link dies.</p>
     <div class="cta">
+      <a id="dl" class="btn dl" href="https://github.com/mcfearsome/dev-week-nyc-2026-tunnel-solutions/releases/tag/v0.1.0"><span class="dlico" aria-hidden="true">&darr;</span> <span id="dlLabel">Download the app</span></a>
       <button class="install" id="install" title="click to copy"><span class="pr">$</span> cargo install tnls <span class="cp" id="cp">copy</span></button>
-      <a href="https://github.com/mcfearsome/dev-week-nyc-2026-tunnel-solutions" class="btn">View source &rarr;</a>
+    </div>
+    <div class="cta-sub">
+      <a id="dlMac" href="https://github.com/mcfearsome/dev-week-nyc-2026-tunnel-solutions/releases/download/v0.1.0/tnls-rendezvous-gui-aarch64-apple-darwin.tar.gz">macOS&nbsp;(Apple&nbsp;Silicon)</a><span class="sep" id="sepMac">&middot;</span>
+      <a id="dlLinux" href="https://github.com/mcfearsome/dev-week-nyc-2026-tunnel-solutions/releases/download/v0.1.0/tnls-rendezvous-gui-x86_64-unknown-linux-gnu.tar.gz">Linux&nbsp;(x86_64)</a><span class="sep" id="sepLinux">&middot;</span>
+      <a href="https://github.com/mcfearsome/dev-week-nyc-2026-tunnel-solutions/releases/tag/v0.1.0">all&nbsp;releases</a><span class="sep">&middot;</span>
+      <a href="https://github.com/mcfearsome/dev-week-nyc-2026-tunnel-solutions">source</a>
     </div>
   </div>
 
@@ -306,6 +317,33 @@
       setTimeout(() => { cp.textContent = "copy"; cp.style.color = ""; }, 1600);
     }).catch(() => {});
   });
+
+  // OS-aware GUI download. Progressive enhancement: the button already links to the
+  // v0.1.0 releases page, so it works with JS off; here we upgrade it to a direct
+  // per-OS asset and drop the now-redundant link from the sub row. textContent only.
+  (function () {
+    const base = "https://github.com/mcfearsome/dev-week-nyc-2026-tunnel-solutions/releases/download/v0.1.0/";
+    const ASSET = {
+      mac: base + "tnls-rendezvous-gui-aarch64-apple-darwin.tar.gz",
+      linux: base + "tnls-rendezvous-gui-x86_64-unknown-linux-gnu.tar.gz",
+    };
+    const dl = document.getElementById("dl");
+    if (!dl) return;
+    const ua = (navigator.userAgent || "") + " " + (navigator.platform || "");
+    let os = null;
+    if (/Mac/i.test(ua)) os = "mac";
+    else if (/Linux|X11/i.test(ua) && !/Android/i.test(ua)) os = "linux";
+    if (!os) return; // Windows / unknown: keep the safe "Download the app" → releases default
+
+    dl.href = ASSET[os];
+    const label = document.getElementById("dlLabel");
+    if (label) label.textContent = os === "mac" ? "Download for macOS" : "Download for Linux";
+    // hide the matching platform's now-redundant link + its separator
+    const link = document.getElementById(os === "mac" ? "dlMac" : "dlLinux");
+    const sep = document.getElementById(os === "mac" ? "sepMac" : "sepLinux");
+    if (link) link.style.display = "none";
+    if (sep) sep.style.display = "none";
+  })();
 </script>
 </body>
 </html>
