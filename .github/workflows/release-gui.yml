@@ -1,0 +1,89 @@
+name: release-gui
+
+# Build the native rendezvous GUI for each desktop platform and attach the archives to a
+# GitHub Release. Triggers on a pushed version tag (e.g. `v0.1.0`), or manually via
+# workflow_dispatch against an existing tag.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to publish the GUI assets to (e.g. v0.1.0)'
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-13
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      # eframe/egui (winit + glow) needs the X11/Wayland/GL dev headers to build on Linux.
+      - name: Install Linux GUI build deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libxkbcommon-dev libwayland-dev libgl1-mesa-dev libssl-dev
+
+      # Build the GUI plus the `tnls-rendezvous` binary it spawns for the send side.
+      - name: Build
+        run: cargo build --release --locked --target ${{ matrix.target }} -p rendezvous-gui -p tnls-rendezvous
+
+      - name: Package (unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="tnls-rendezvous-gui-${{ matrix.target }}"
+          mkdir "$stage"
+          cp "target/${{ matrix.target }}/release/tnls-rendezvous-gui" "$stage/"
+          cp "target/${{ matrix.target }}/release/tnls-rendezvous" "$stage/"
+          cp crates/rendezvous-gui/README.md "$stage/"
+          tar czf "$stage.tar.gz" "$stage"
+          echo "ASSET=$stage.tar.gz" >> "$GITHUB_ENV"
+
+      - name: Package (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $stage = "tnls-rendezvous-gui-${{ matrix.target }}"
+          New-Item -ItemType Directory -Path $stage | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/tnls-rendezvous-gui.exe" $stage
+          Copy-Item "target/${{ matrix.target }}/release/tnls-rendezvous.exe" $stage
+          Copy-Item "crates/rendezvous-gui/README.md" $stage
+          Compress-Archive -Path $stage -DestinationPath "$stage.zip"
+          "ASSET=$stage.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Attach to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          files: ${{ env.ASSET }}
+          fail_on_unmatched_files: true

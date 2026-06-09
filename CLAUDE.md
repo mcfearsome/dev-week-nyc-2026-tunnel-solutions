@@ -83,6 +83,11 @@ binary (`cargo build --release -p relay`); TLS is terminated by Fly, so the rela
 plain `ws` internally and binds `$PORT` (8080 on Fly). Aggregate stats persist to
 `STATS_PATH=/data/stats.json` on a Fly volume. See `fly.toml` + `Dockerfile`.
 
+The **native GUI** ships separately: `.github/workflows/release-gui.yml` builds
+`tnls-rendezvous-gui` (+ the `tnls-rendezvous` binary it spawns) for Linux/macOS/Windows on
+a pushed `v*` tag and attaches the archives to the GitHub Release. It is **not** part of the
+Fly deploy (only the relay is deployed).
+
 ## Design docs
 
 `docs/superpowers/specs/` (designs, each with a **Status** header) and `.../plans/` (phased
